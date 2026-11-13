@@ -1,0 +1,19 @@
+# Dependabot configuration for Mitch.
+#
+# Reference: https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference
+#
+# Go modules are checked weekly. Security updates also follow the "ignore"
+# rule below.
+version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    ignore:
+      # modernc.org/sqlite only works with the exact modernc.org/libc version
+      # named in its own go.mod (https://pkg.go.dev/modernc.org/sqlite).
+      # A libc-only bump breaks that, so Dependabot never proposes one.
+      # libc moves only when modernc.org/sqlite is upgraded, and CI's
+      # "dependency-pins" job fails if the two ever disagree.
+      - dependency-name: "modernc.org/libc"

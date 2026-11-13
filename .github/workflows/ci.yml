@@ -2,6 +2,7 @@
 #
 # Runs on every pull request and every push to main:
 #   lint  - golangci-lint with the settings in .golangci.yml
+#   dependency-pins - modernc.org/libc matches what modernc.org/sqlite requires
 #   test  - all tests with the race detector, on Linux and macOS
 #   integration - tests against real Vault dev servers (oldest and newest supported)
 #   build - a static binary for every platform Mitch ships for
@@ -28,6 +29,37 @@ jobs:
       - uses: golangci/golangci-lint-action@v9
         with:
           version: v2.15.0
+
+  dependency-pins:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      # modernc.org/sqlite only works with the exact modernc.org/libc version
+      # named in its own go.mod (https://pkg.go.dev/modernc.org/sqlite).
+      # This fails if go.mod uses any other libc version.
+      - name: Check modernc.org/libc matches modernc.org/sqlite
+        run: |
+          set -euo pipefail
+          sqlite_version="$(go list -m -f '{{.Version}}' modernc.org/sqlite)"
+          libc_in_use="$(go list -m -f '{{.Version}}' modernc.org/libc)"
+          libc_required="$(go mod graph | awk -v parent="modernc.org/sqlite@${sqlite_version}" '$1 == parent && $2 ~ /^modernc\.org\/libc@/ { sub(/^modernc\.org\/libc@/, "", $2); print $2 }')"
+
+          echo "modernc.org/sqlite ${sqlite_version} requires modernc.org/libc ${libc_required:-<not found>}"
+          echo "go.mod uses modernc.org/libc ${libc_in_use}"
+
+          if [ -z "$libc_required" ]; then
+            echo "Could not find which modernc.org/libc version modernc.org/sqlite ${sqlite_version} requires."
+            exit 1
+          fi
+          if [ "$libc_in_use" != "$libc_required" ]; then
+            echo "modernc.org/libc ${libc_in_use} does not match the ${libc_required} that modernc.org/sqlite ${sqlite_version} requires."
+            echo "Fix: go get modernc.org/libc@${libc_required} && go mod tidy"
+            echo "To upgrade libc, upgrade modernc.org/sqlite instead: go get modernc.org/sqlite@<version> && go mod tidy"
+            exit 1
+          fi
 
   test:
     strategy:

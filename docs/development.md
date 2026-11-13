@@ -41,7 +41,12 @@ Each is added in the pull request that first needs it. In use today: all four.
 
 `vault/api` brings in these indirect dependencies, all pure Go: `cenkalti/backoff`, `go-jose/go-jose`, HashiCorp's `errwrap`, `go-cleanhttp`, `go-multierror`, `go-retryablehttp`, `go-rootcerts`, `go-secure-stdlib`, `go-sockaddr` and `hcl` v1, `mitchellh/go-homedir`, `mitchellh/mapstructure`, `ryanuber/go-glob`, and `golang.org/x/{net,text,time}`. `modernc.org/sqlite` brings in `modernc.org/{libc,mathutil,memory}`, `dustin/go-humanize`, `google/uuid`, `mattn/go-isatty`, `ncruces/go-strftime`, `remyoudompheng/bigfft` and `golang.org/x/sys`, all pure Go. The exact versions are in [`go.mod`](../go.mod).
 
-`modernc.org/sqlite` must stay on the `modernc.org/libc` version its own `go.mod` names. Upgrade them together with `go get modernc.org/sqlite@<version>` and never bump `libc` on its own ([driver docs](https://pkg.go.dev/modernc.org/sqlite)).
+`modernc.org/sqlite` must stay on the `modernc.org/libc` version its own `go.mod` names ([driver docs](https://pkg.go.dev/modernc.org/sqlite)). This is enforced, so nobody has to remember it:
+
+- [`.github/dependabot.yml`](../.github/dependabot.yml) tells Dependabot never to propose a `libc`-only update.
+- The CI job `dependency-pins` fails if the two versions disagree, and prints the command to fix it.
+
+To upgrade, run `go get modernc.org/sqlite@<version> && go mod tidy`. That moves `libc` along with it.
 
 ## Integration tests
 
