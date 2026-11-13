@@ -28,7 +28,7 @@ func runInit(runContext runContext, arguments []string) int {
 
 	initLogger := logging.ForComponent(runContext.logger, "store")
 
-	passphrase, err := readPassphrase(runContext, databaseFlags)
+	passphrase, err := readPassphrase(runContext, databaseFlags, newPassphrase)
 	if err != nil {
 		initLogger.Error("cannot create the database", logging.FieldOperation, "init", logging.FieldError, err.Error())
 		return exitcode.GeneralError

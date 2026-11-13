@@ -2,7 +2,7 @@
 
 Mitch saves each scan in a local SQLite file, encrypted with a key that only your passphrase can unlock. A stolen database file or a leaked backup is unreadable without the passphrase. To set it up, see [saving-scans.md](saving-scans.md).
 
-> **Not built yet:** changing the passphrase, and typing the passphrase at a prompt. Today the passphrase comes from `MITCH_PASSPHRASE` or `--passphrase-file`.
+> **Not built yet:** changing the passphrase.
 
 ## What Mitch stores
 
@@ -31,7 +31,7 @@ Disk encryption alone is not enough: it doesn't protect data once the machine is
 2. Each encrypted scan is bound to its scan id. A blob copied onto another row fails to decrypt instead of showing the wrong scan.
 3. The data key is stored only in wrapped (encrypted) form. It is wrapped with a key derived from your **passphrase** using Argon2id ([x/crypto/argon2](https://pkg.go.dev/golang.org/x/crypto/argon2)): time 3, 64 MiB of memory, 4 threads, and a random salt per database. These are RFC 9106's settings for machines that can't spare 2 GiB. They are stored in the file, so later versions can raise them.
 4. Passphrases must be at least 12 characters. A wrong passphrase is rejected before anything is read.
-5. The passphrase is never written to disk or to logs.
+5. The passphrase comes from a prompt that does not show what you type, `MITCH_PASSPHRASE`, or `--passphrase-file`. Mitch never writes it to disk or to logs.
 
 The database file is created readable only by its owner (`0600`). Mitch warns you if the file or a `--passphrase-file` can be read by other users, with the `chmod` command to fix it.
 
