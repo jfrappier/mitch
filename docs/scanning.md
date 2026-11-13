@@ -53,10 +53,11 @@ Mitch uses the same environment variables as the `vault` CLI: `VAULT_ADDR`, `VAU
 ```shell
 export VAULT_ADDR=https://vault.example.com:8200
 export VAULT_TOKEN=<token from step 1>
-export MITCH_PASSPHRASE='<your passphrase>'
 
 mitch scan
 ```
+
+Mitch asks for your passphrase. In CI, set `MITCH_PASSPHRASE` instead.
 
 The scan is saved and its id is printed. Use `mitch history` and `mitch export` to see it ([saving-scans.md](saving-scans.md)).
 

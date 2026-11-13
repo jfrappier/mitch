@@ -6,20 +6,26 @@
 
 The passphrase unlocks the database. It must be at least 12 characters. **If you lose it, your saved scans cannot be recovered.** Keep it in a password manager.
 
-Give it to Mitch in one of two ways:
+Mitch looks for it in this order:
 
 | Source | Use it for |
 | --- | --- |
+| `--passphrase-file FILE` | Scripts. One trailing line break is ignored. Make the file readable only by you: `chmod 600 FILE` |
 | `MITCH_PASSPHRASE` environment variable | CI jobs and Docker, from your secret store |
-| `--passphrase-file FILE` | Local runs. One trailing line break is ignored. Make the file readable only by you: `chmod 600 FILE` |
+| A prompt | Running Mitch by hand. What you type is not shown. `mitch init` asks twice. |
 
-`--passphrase-file` wins when both are set.
+Mitch only prompts when it runs in a terminal. In CI or a pipe, with no file or variable set, it fails right away instead of waiting.
 
 ## 2. Create the database
 
 ```shell
-export MITCH_PASSPHRASE='<your passphrase>'
 mitch init
+```
+
+```text
+Passphrase:
+Repeat passphrase:
+Created mitch.db
 ```
 
 This creates `mitch.db` in the current directory, readable only by you. To put it somewhere else, pass `--db PATH` or set `MITCH_DB` on every command. `mitch init` never overwrites an existing file.
@@ -66,5 +72,6 @@ These work on `init`, `scan`, `history` and `export`:
 | --- | --- |
 | `no Mitch database at ...` | Run `mitch init`, or pass `--db` with the right path. |
 | `the passphrase is wrong, or the data was changed or damaged` | Check `MITCH_PASSPHRASE` or `--passphrase-file`. |
-| `no passphrase given` | Set `MITCH_PASSPHRASE` or pass `--passphrase-file`. |
+| `no passphrase given and no terminal to ask on` | Set `MITCH_PASSPHRASE` or pass `--passphrase-file`. |
+| `the two passphrases do not match` | Run `mitch init` again. Nothing was created. |
 | `... has permissions 0644; other users on this machine can read it` | Run the `chmod 600` command in the message. |

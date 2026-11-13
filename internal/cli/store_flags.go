@@ -1,12 +1,15 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"strings"
+
+	"golang.org/x/term"
 
 	"github.com/jfrappier/mitch/internal/encryption"
 	"github.com/jfrappier/mitch/internal/logging"
@@ -23,6 +26,28 @@ const (
 
 	// defaultDatabasePath is used when neither --db nor MITCH_DB is set.
 	defaultDatabasePath = "mitch.db"
+)
+
+// stdinIsTerminal reports whether standard input is an interactive terminal,
+// where a person can type a passphrase. Tests replace it.
+var stdinIsTerminal = func() bool {
+	return term.IsTerminal(int(os.Stdin.Fd())) //nolint:gosec // a file descriptor always fits in int
+}
+
+// readHiddenLine reads one line from the terminal without showing what is
+// typed, like ssh does for passwords. Tests replace it.
+// Docs: https://pkg.go.dev/golang.org/x/term#ReadPassword
+var readHiddenLine = func() ([]byte, error) {
+	return term.ReadPassword(int(os.Stdin.Fd())) //nolint:gosec // a file descriptor always fits in int
+}
+
+// passphraseUse says whether a passphrase is being set for the first time
+// (so it is asked twice) or used to unlock an existing database.
+type passphraseUse int
+
+const (
+	unlockPassphrase passphraseUse = iota
+	newPassphrase
 )
 
 // newKDFParams picks the Argon2id settings for "mitch init". Tests replace it
@@ -51,11 +76,15 @@ func addStoreFlags(flags *flag.FlagSet) storeFlags {
 	return registered
 }
 
-// readPassphrase gets the passphrase from --passphrase-file or MITCH_PASSPHRASE.
+// readPassphrase gets the passphrase, trying in order:
 //
-// A file wins over the environment variable, so an explicit flag always does
-// what it says.
-func readPassphrase(runContext runContext, flags storeFlags) ([]byte, error) {
+//  1. --passphrase-file, so an explicit flag always does what it says
+//  2. the MITCH_PASSPHRASE environment variable, for CI and Docker
+//  3. a prompt, when a person is at a terminal
+//
+// With no terminal (a CI job or a pipe) and no file or variable, it fails
+// instead of waiting for input that will never come.
+func readPassphrase(runContext runContext, flags storeFlags, use passphraseUse) ([]byte, error) {
 	if *flags.passphraseFile != "" {
 		return readPassphraseFile(runContext, *flags.passphraseFile)
 	}
@@ -65,7 +94,41 @@ func readPassphrase(runContext runContext, flags storeFlags) ([]byte, error) {
 		return []byte(fromEnvironment), nil
 	}
 
-	return nil, fmt.Errorf("no passphrase given: set %s or pass --passphrase-file", passphraseEnvVar)
+	if !stdinIsTerminal() {
+		return nil, fmt.Errorf("no passphrase given and no terminal to ask on: set %s or pass --passphrase-file", passphraseEnvVar)
+	}
+
+	return promptForPassphrase(runContext, use)
+}
+
+// promptForPassphrase asks for the passphrase on the terminal without echoing
+// it. A new passphrase is asked twice, so a typo can't lock the user out.
+// Prompts go to standard error, so standard output stays clean for results.
+func promptForPassphrase(runContext runContext, use passphraseUse) ([]byte, error) {
+	fmt.Fprint(runContext.stderr, "Passphrase: ")
+	first, err := readHiddenLine()
+	fmt.Fprintln(runContext.stderr)
+	if err != nil {
+		return nil, fmt.Errorf("reading the passphrase from the terminal failed: %w", err)
+	}
+	if len(first) == 0 {
+		return nil, errors.New("the passphrase is empty")
+	}
+
+	if use == unlockPassphrase {
+		return first, nil
+	}
+
+	fmt.Fprint(runContext.stderr, "Repeat passphrase: ")
+	second, err := readHiddenLine()
+	fmt.Fprintln(runContext.stderr)
+	if err != nil {
+		return nil, fmt.Errorf("reading the passphrase from the terminal failed: %w", err)
+	}
+	if !bytes.Equal(first, second) {
+		return nil, errors.New("the two passphrases do not match; nothing was created")
+	}
+	return first, nil
 }
 
 // readPassphraseFile reads a passphrase from a file. One trailing line break
@@ -100,7 +163,7 @@ func readPassphraseFile(runContext runContext, path string) ([]byte, error) {
 // openStore opens and unlocks the database, and warns if its file permissions
 // let other users read it.
 func openStore(ctx context.Context, runContext runContext, flags storeFlags) (*store.Store, error) {
-	passphrase, err := readPassphrase(runContext, flags)
+	passphrase, err := readPassphrase(runContext, flags, unlockPassphrase)
 	if err != nil {
 		return nil, err
 	}
