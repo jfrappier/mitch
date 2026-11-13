@@ -4,7 +4,7 @@
 
 Before your first saved scan, create the database with `mitch init`. See [saving-scans.md](saving-scans.md). To print the inventory as JSON without saving it, use `--no-save`.
 
-> **Not built yet:** comparing scans.
+To see what changed between two saved scans, use `mitch diff`. See [comparing-scans.md](comparing-scans.md).
 
 ## 1. Create the Mitch policy and token
 
