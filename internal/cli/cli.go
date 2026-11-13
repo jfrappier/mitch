@@ -42,18 +42,19 @@ type command struct {
 // the logger to use.
 type runContext struct {
 	stdout io.Writer
+	stderr io.Writer
 	logger *slog.Logger
 }
 
 // commands returns every command Mitch knows, in the order "mitch help" lists them.
 func commands() []command {
 	return []command{
-		{name: "scan", summary: "Scan a Vault cluster and store the results (not built yet)", run: notImplemented("scan")},
+		{name: "scan", summary: "Scan a Vault cluster and print the inventory as JSON", run: runScan},
 		{name: "report", summary: "Show reports from stored scans (not built yet)", run: notImplemented("report")},
 		{name: "diff", summary: "Show what changed between two scans (not built yet)", run: notImplemented("diff")},
 		{name: "export", summary: "Export scan results as JSON or SARIF (not built yet)", run: notImplemented("export")},
 		{name: "terraform", summary: "Generate Terraform for the scanned Vault config (not built yet)", run: notImplemented("terraform")},
-		{name: "policy", summary: "Print the Vault policies Mitch needs (not built yet)", run: notImplemented("policy")},
+		{name: "policy", summary: "Print the Vault policy Mitch needs (--sudo for the add-on)", run: runPolicy},
 		{name: "serve", summary: "Start the local read-only web UI (not built yet)", run: notImplemented("serve")},
 		{name: "version", summary: "Print the Mitch version", run: runVersion},
 		{name: "help", summary: "Show this help", run: runHelp},
@@ -110,7 +111,7 @@ func Run(arguments []string, stdout io.Writer, stderr io.Writer) int {
 		return exitcode.UsageError
 	}
 
-	context := runContext{stdout: stdout, logger: logger}
+	context := runContext{stdout: stdout, stderr: stderr, logger: logger}
 	exitCode := selected.run(context, commandArguments)
 	return exitCode
 }

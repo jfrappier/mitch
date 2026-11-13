@@ -1,6 +1,8 @@
 # How Mitch protects your data
 
 > **Status:** this describes the planned design. Storage and encryption are not built yet. This page will be updated as each part ships.
+>
+> **Today:** `mitch scan` prints its inventory as plain JSON and stores nothing. With `--output`, the file is created readable only by you (`0600`) and Mitch logs a warning that it is plain text. The inventory never contains secret values, but it does contain your Vault layout and the full text of every ACL policy, so treat it as sensitive.
 
 ## What Mitch stores
 

@@ -14,6 +14,14 @@ linters:
     - gosec       # common security mistakes
     - misspell    # spelling mistakes in comments and strings
     - nilerr      # returning nil when an error was found
+  exclusions:
+    rules:
+      # Test code writes fixed fake responses and temporary files it creates
+      # itself, so unchecked writes and file-path warnings are noise there.
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
   settings:
     errcheck:
       # Writing help text to stdout cannot usefully fail, so fmt.Fprint*

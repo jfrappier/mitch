@@ -9,7 +9,8 @@
 
 | Task | Command |
 | --- | --- |
-| Run all tests | `go test -race -count=1 ./...` |
+| Run all unit tests | `go test -race -count=1 ./...` |
+| Run integration tests | See [Integration tests](#integration-tests) |
 | Lint | `golangci-lint run ./...` |
 | Check formatting | `gofmt -l .` (prints nothing when everything is formatted) |
 | Build for your machine | `go build -o mitch ./cmd/mitch` |
@@ -35,4 +36,30 @@ CI runs all of these on every pull request. See [`.github/workflows/ci.yml`](../
 | `modernc.org/sqlite` | SQLite driver, no cgo | `github.com/ncruces/go-sqlite3` |
 | `golang.org/x/crypto/argon2` | Passphrase key derivation | Standard library `crypto/pbkdf2` |
 
-None are used yet. Each is added in the pull request that first needs it.
+Each is added in the pull request that first needs it. In use today: `github.com/hashicorp/vault/api`.
+
+`vault/api` brings in these indirect dependencies, all pure Go: `cenkalti/backoff`, `go-jose/go-jose`, HashiCorp's `errwrap`, `go-cleanhttp`, `go-multierror`, `go-retryablehttp`, `go-rootcerts`, `go-secure-stdlib`, `go-sockaddr` and `hcl` v1, `mitchellh/go-homedir`, `mitchellh/mapstructure`, `ryanuber/go-glob`, and `golang.org/x/{crypto,net,text,time}`. The exact versions are in [`go.mod`](../go.mod).
+
+## Integration tests
+
+Integration tests run Mitch against a real Vault dev server. They only build with the `integration` tag, and they fail (not skip) when the two variables below are missing, so a misconfigured run can't pass by accident.
+
+Start a Vault dev server in Docker. The official image runs a dev server by default and takes its root token from `VAULT_DEV_ROOT_TOKEN_ID` ([hashicorp/vault on Docker Hub](https://hub.docker.com/r/hashicorp/vault)). The image is multi-arch, so this works on Apple Silicon:
+
+```shell
+docker run -d --name vault-dev -p 8200:8200 --cap-add=IPC_LOCK -e VAULT_DEV_ROOT_TOKEN_ID=root hashicorp/vault:2.2.2
+```
+
+Run the tests:
+
+```shell
+MITCH_TEST_VAULT_ADDR=http://127.0.0.1:8200 MITCH_TEST_VAULT_ROOT_TOKEN=root go test -tags integration -count=1 -v ./...
+```
+
+Remove the server when you are done:
+
+```shell
+docker rm -f vault-dev
+```
+
+CI runs the same tests against Vault 1.19.5 and 2.2.2. Never point these variables at a real cluster: the tests create policies and tokens.
