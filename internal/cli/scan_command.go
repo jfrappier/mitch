@@ -6,7 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/jfrappier/mitch/internal/exitcode"
@@ -180,27 +179,7 @@ func writeOutput(runContext runContext, outputPath string, content []byte) error
 		return err
 	}
 
-	// The user chooses the output path on purpose, so gosec's file-path
-	// warning (G304) does not apply here.
-	file, err := os.OpenFile(outputPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, outputFileMode) //nolint:gosec // path is the user's --output flag
-	if err != nil {
-		return err
-	}
-
-	// OpenFile only applies the mode to new files, so tighten an existing one too.
-	err = file.Chmod(outputFileMode)
-	if err != nil {
-		closeErr := file.Close()
-		return errors.Join(fmt.Errorf("setting permissions on %s failed: %w", outputPath, err), closeErr)
-	}
-
-	_, err = file.Write(content)
-	if err != nil {
-		closeErr := file.Close()
-		return errors.Join(fmt.Errorf("writing %s failed: %w", outputPath, err), closeErr)
-	}
-
-	err = file.Close()
+	err := writePrivateFile(outputPath, content)
 	if err != nil {
 		return err
 	}

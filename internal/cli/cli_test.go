@@ -71,7 +71,7 @@ func TestUnknownCommandFailsLoudly(t *testing.T) {
 }
 
 func TestStubCommandsReturnNotImplemented(t *testing.T) {
-	stubs := []string{"report", "terraform", "serve"}
+	stubs := []string{"terraform", "serve"}
 
 	for _, name := range stubs {
 		t.Run(name, func(t *testing.T) {

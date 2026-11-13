@@ -52,11 +52,11 @@ func TestDiffComparesTheTwoNewestScans(t *testing.T) {
 		t.Fatalf("diff failed: exit %d\nstderr: %s", exitCode, stderr)
 	}
 	for _, expected := range []string{
-		"Comparing scan " + middleID,
-		"with scan " + newestID,
-		"ACL policies in namespace (root)",
-		"  + newest",
-		"  - middle",
+		"- From scan: " + middleID,
+		"- To scan: " + newestID,
+		"## ACL policies in namespace (root)",
+		"\n+ newest\n",
+		"\n- middle\n",
 	} {
 		if !strings.Contains(stdout, expected) {
 			t.Errorf("diff output is missing %q:\n%s", expected, stdout)
@@ -70,7 +70,7 @@ func TestDiffComparesTheTwoNewestScans(t *testing.T) {
 	}
 }
 
-func TestDiffFromToAndJSON(t *testing.T) {
+func TestDiffFromToSavesJSONAndShowsMarkdown(t *testing.T) {
 	path := testDatabase(t)
 	runForTest("init")
 
@@ -80,9 +80,16 @@ func TestDiffFromToAndJSON(t *testing.T) {
 	thirdID := saveTestScan(t, path, start.Add(2*time.Hour), inventoryWithPolicy("third"))
 
 	outputPath := filepath.Join(t.TempDir(), "diff.json")
-	exitCode, _, stderr := runForTest("diff", "--from", firstID, "--to", thirdID, "--format", "json", "--output", outputPath)
+	// No --format: the terminal gets Markdown, and the .json file gets JSON.
+	exitCode, stdout, stderr := runForTest("diff", "--from", firstID, "--to", thirdID, "--output", outputPath)
 	if exitCode != exitcode.Success {
 		t.Fatalf("diff failed: exit %d\nstderr: %s", exitCode, stderr)
+	}
+	if !strings.HasPrefix(stdout, "# Mitch diff") {
+		t.Errorf("expected Markdown in the terminal, got:\n%s", stdout)
+	}
+	if !strings.Contains(stderr, "written as plain text") {
+		t.Errorf("expected the plain-text file warning, got:\n%s", stderr)
 	}
 
 	content, err := os.ReadFile(outputPath)
@@ -117,7 +124,7 @@ func TestDiffNeedsTwoScans(t *testing.T) {
 	saveTestScan(t, path, time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC), inventoryWithPolicy("only"))
 
 	exitCode, _, stderr := runForTest("diff")
-	if exitCode != exitcode.GeneralError || !strings.Contains(stderr, "at least two saved scans") {
+	if exitCode != exitcode.GeneralError || !strings.Contains(stderr, "this needs 2") {
 		t.Errorf("expected exit %d naming the need for two scans, got exit %d\nstderr: %s", exitcode.GeneralError, exitCode, stderr)
 	}
 }
@@ -142,11 +149,12 @@ func TestDiffBadFlagsFailBeforeOpeningTheDatabase(t *testing.T) {
 		arguments []string
 		message   string
 	}{
-		{"bad format", []string{"diff", "--format", "yaml"}, `--format must be "text" or "json"`},
+		{"bad format", []string{"diff", "--format", "yaml"}, `--format must be "markdown" or "json"`},
 		{"only from", []string{"diff", "--from", "abc"}, "give both --from and --to"},
 		{"only to", []string{"diff", "--to", "abc"}, "give both --from and --to"},
 		{"same scan", []string{"diff", "--from", "abc", "--to", "abc"}, "the same scan"},
 		{"extra argument", []string{"diff", "extra"}, "unexpected argument"},
+		{"unknown output extension", []string{"diff", "--output", "diff.txt"}, "must end in .md (Markdown) or .json (JSON)"},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -177,5 +185,33 @@ func TestDiffDamagedInventoryFailsLoudly(t *testing.T) {
 	exitCode, _, stderr := runForTest("diff")
 	if exitCode != exitcode.GeneralError || !strings.Contains(stderr, "not a valid inventory") {
 		t.Errorf("expected exit %d for a damaged inventory, got exit %d\nstderr: %s", exitcode.GeneralError, exitCode, stderr)
+	}
+}
+
+func TestDiffFormatJSONPrintsJSONAndSavesMarkdown(t *testing.T) {
+	path := testDatabase(t)
+	runForTest("init")
+	start := time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC)
+	saveTestScan(t, path, start, inventoryWithPolicy("first"))
+	saveTestScan(t, path, start.Add(time.Hour), inventoryWithPolicy("second"))
+
+	outputPath := filepath.Join(t.TempDir(), "DIFF.MD")
+	exitCode, stdout, stderr := runForTest("diff", "--format", "json", "--output", outputPath)
+	if exitCode != exitcode.Success {
+		t.Fatalf("diff failed: exit %d\nstderr: %s", exitCode, stderr)
+	}
+
+	var result diff.Result
+	err := json.Unmarshal([]byte(stdout), &result)
+	if err != nil {
+		t.Fatalf("--format json must print JSON in the terminal: %v\n%s", err, stdout)
+	}
+
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("reading the diff file failed: %v", err)
+	}
+	if !strings.HasPrefix(string(content), "# Mitch diff") {
+		t.Errorf("an .MD file must hold Markdown whatever --format says, got:\n%s", content)
 	}
 }

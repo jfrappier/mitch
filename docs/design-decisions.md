@@ -27,6 +27,11 @@ Each decision below says what was chosen, why, and what it means for you as a us
 **Decision:** `mitch diff` compares two saved scans. It never contacts Vault, and it lists a warning instead of guessing when a scan skipped checks or left a part out.
 **Impact:** Save a scan before and after a change to see what changed. If a scan was partial, read the warnings before trusting a "removed" line.
 
+## Reports in Markdown and JSON
+
+**Decision:** `mitch report` and `mitch diff` show Markdown in the terminal. `--output` also saves a file, in JSON or Markdown depending on its extension. No CSV or HTML; the planned `mitch serve` web UI covers browsing.
+**Impact:** One run gives you something to read and a JSON file for scripts. Markdown pastes cleanly into a pull request, ticket or wiki.
+
 ## Git as the source of truth
 
 **Decision:** Mitch recommends that all Vault policies live in git as HCL files used by Terraform, and that all Vault configuration is Terraform. You point Mitch at a local checkout; Mitch never clones or holds git credentials.

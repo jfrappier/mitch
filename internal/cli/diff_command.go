@@ -3,40 +3,26 @@ package cli
 import (
 	"bytes"
 	"context"
-	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
-	"log/slog"
 
 	"github.com/jfrappier/mitch/internal/diff"
 	"github.com/jfrappier/mitch/internal/exitcode"
 	"github.com/jfrappier/mitch/internal/logging"
-	"github.com/jfrappier/mitch/internal/scan"
-	"github.com/jfrappier/mitch/internal/store"
 )
-
-// Output formats for "mitch diff".
-const (
-	diffFormatText = "text"
-	diffFormatJSON = "json"
-)
-
-// errNotEnoughScans means the database has fewer than two saved scans.
-var errNotEnoughScans = errors.New("diff needs at least two saved scans")
 
 // runDiff shows what changed between two saved scans. With no --from and
 // --to it compares the two newest scans.
 //
-//	mitch diff [--from ID --to ID] [--format text|json] [--output FILE] [--db PATH] [--passphrase-file FILE]
+//	mitch diff [--from ID --to ID] [--format markdown|json] [--output FILE.md|FILE.json] [--db PATH] [--passphrase-file FILE]
 func runDiff(runContext runContext, arguments []string) int {
 	flags := flag.NewFlagSet("mitch diff", flag.ContinueOnError)
 	flags.SetOutput(runContext.stderr)
 	databaseFlags := addStoreFlags(flags)
 	fromID := flags.String("from", "", `id of the older scan (see "mitch history"); default: the second newest scan`)
 	toID := flags.String("to", "", `id of the newer scan (see "mitch history"); default: the newest scan`)
-	format := flags.String("format", diffFormatText, "output format: text or json")
-	outputPath := flags.String("output", "", "write the diff to this file instead of standard output")
+	format := flags.String("format", formatMarkdown, "what to print in the terminal: markdown or json")
+	outputPath := flags.String("output", "", "also save the diff to this file; .md saves Markdown, .json saves JSON")
 
 	exitCode, parsed := parseCommandFlags(runContext, flags, arguments)
 	if !parsed {
@@ -44,8 +30,9 @@ func runDiff(runContext runContext, arguments []string) int {
 	}
 
 	// Check the flags before asking for a passphrase, so a typo fails fast.
-	if *format != diffFormatText && *format != diffFormatJSON {
-		fmt.Fprintf(runContext.stderr, "mitch diff: --format must be %q or %q, not %q\n", diffFormatText, diffFormatJSON, *format)
+	err := checkOutputFlags(*format, *outputPath)
+	if err != nil {
+		fmt.Fprintf(runContext.stderr, "mitch diff: %v\n", err)
 		return exitcode.UsageError
 	}
 	if (*fromID == "") != (*toID == "") {
@@ -69,7 +56,7 @@ func runDiff(runContext runContext, arguments []string) int {
 
 	// Step 1: pick the two scans.
 	if *fromID == "" {
-		newest, secondNewest, err := twoNewestScans(ctx, opened)
+		newest, err := newestScanIDs(ctx, opened, 2)
 		if err != nil {
 			diffLogger.Error("cannot pick scans to compare",
 				logging.FieldOperation, "diff",
@@ -78,8 +65,8 @@ func runDiff(runContext runContext, arguments []string) int {
 			)
 			return exitcode.GeneralError
 		}
-		*fromID = secondNewest
-		*toID = newest
+		*toID = newest[0]
+		*fromID = newest[1]
 	}
 
 	// Step 2: decrypt both scans.
@@ -104,22 +91,13 @@ func runDiff(runContext runContext, arguments []string) int {
 		return exitcode.GeneralError
 	}
 
-	// Step 4: write the result in the chosen format.
-	content, err := renderDiff(result, *format)
+	// Step 4: show it, and save it if --output was given.
+	rendered, err := renderDiff(result)
 	if err != nil {
 		diffLogger.Error("writing the diff failed", logging.FieldOperation, "render_diff", logging.FieldError, err.Error())
 		return exitcode.GeneralError
 	}
-
-	// A file output logs its own plain-text warning in writeOutput.
-	if *outputPath == "" {
-		diffLogger.Warn("printing decrypted scan details as plain text; treat the output as sensitive",
-			logging.FieldOperation, "diff",
-			"from", *fromID,
-			"to", *toID,
-		)
-	}
-	err = writeOutput(runContext, *outputPath, content)
+	err = writeRendered(runContext, "diff", *format, *outputPath, rendered)
 	if err != nil {
 		diffLogger.Error("could not write the diff", logging.FieldOperation, "write_output", "output", *outputPath, logging.FieldError, err.Error())
 		return exitcode.GeneralError
@@ -135,54 +113,16 @@ func runDiff(runContext runContext, arguments []string) int {
 	return exitcode.Success
 }
 
-// twoNewestScans returns the ids of the newest and second newest scans.
-func twoNewestScans(ctx context.Context, opened *store.Store) (string, string, error) {
-	summaries, err := opened.ListScans(ctx)
+// renderDiff writes a diff as both Markdown and JSON.
+func renderDiff(result diff.Result) (renderedOutput, error) {
+	var markdown bytes.Buffer
+	err := diff.WriteMarkdown(&markdown, result)
 	if err != nil {
-		return "", "", err
+		return renderedOutput{}, err
 	}
-	if len(summaries) < 2 {
-		return "", "", fmt.Errorf("%w, and %s has %d", errNotEnoughScans, opened.Path(), len(summaries))
-	}
-	// ListScans returns the newest scan first.
-	return summaries[0].ID, summaries[1].ID, nil
-}
-
-// loadInventory decrypts one saved scan and reads it as an Inventory.
-// It returns loaded=false with the exit code to use when it fails.
-func loadInventory(ctx context.Context, diffLogger *slog.Logger, opened *store.Store, scanID string) (scan.Inventory, int, bool) {
-	inventoryJSON, err := opened.LoadScan(ctx, scanID)
+	encoded, err := encodeJSON(result)
 	if err != nil {
-		diffLogger.Error("cannot load the scan", logging.FieldOperation, "load_scan", "scan_id", scanID, logging.FieldError, err.Error())
-		if errors.Is(err, store.ErrScanNotFound) {
-			return scan.Inventory{}, exitcode.UsageError, false
-		}
-		return scan.Inventory{}, exitcode.GeneralError, false
+		return renderedOutput{}, err
 	}
-
-	var inventory scan.Inventory
-	err = json.Unmarshal(inventoryJSON, &inventory)
-	if err != nil {
-		diffLogger.Error("the saved scan is not a valid inventory", logging.FieldOperation, "load_scan", "scan_id", scanID, logging.FieldError, err.Error())
-		return scan.Inventory{}, exitcode.GeneralError, false
-	}
-	return inventory, exitcode.Success, true
-}
-
-// renderDiff turns a Result into text or indented JSON.
-func renderDiff(result diff.Result, format string) ([]byte, error) {
-	if format == diffFormatJSON {
-		encoded, err := json.MarshalIndent(result, "", "  ")
-		if err != nil {
-			return nil, err
-		}
-		return append(encoded, '\n'), nil
-	}
-
-	var text bytes.Buffer
-	err := diff.WriteText(&text, result)
-	if err != nil {
-		return nil, err
-	}
-	return text.Bytes(), nil
+	return renderedOutput{markdown: markdown.Bytes(), json: encoded}, nil
 }
