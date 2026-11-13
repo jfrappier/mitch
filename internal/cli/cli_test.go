@@ -2,10 +2,13 @@ package cli
 
 import (
 	"bytes"
+	"io"
+	"log/slog"
 	"strings"
 	"testing"
 
 	"github.com/jfrappier/mitch/internal/exitcode"
+	"github.com/jfrappier/mitch/internal/logging"
 )
 
 // runForTest calls Run and returns the exit code plus everything written to
@@ -68,7 +71,7 @@ func TestUnknownCommandFailsLoudly(t *testing.T) {
 }
 
 func TestStubCommandsReturnNotImplemented(t *testing.T) {
-	stubs := []string{"scan", "report", "diff", "export", "terraform", "policy", "serve"}
+	stubs := []string{"report", "diff", "export", "terraform", "serve"}
 
 	for _, name := range stubs {
 		t.Run(name, func(t *testing.T) {
@@ -108,4 +111,15 @@ func TestBadGlobalFlagValuesFail(t *testing.T) {
 			t.Errorf("arguments %v: expected an error message, got nothing", arguments)
 		}
 	}
+}
+
+// testLogger returns a logger that discards its output.
+func testLogger(t *testing.T) *slog.Logger {
+	t.Helper()
+
+	logger, err := logging.New(logging.Options{Output: io.Discard, Format: logging.FormatText, Level: logging.LevelInfo})
+	if err != nil {
+		t.Fatalf("creating the logger failed: %v", err)
+	}
+	return logger
 }

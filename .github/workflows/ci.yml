@@ -3,6 +3,7 @@
 # Runs on every pull request and every push to main:
 #   lint  - golangci-lint with the settings in .golangci.yml
 #   test  - all tests with the race detector, on Linux and macOS
+#   integration - tests against real Vault dev servers (oldest and newest supported)
 #   build - a static binary for every platform Mitch ships for
 #
 # Any failing step fails the whole run.
@@ -51,6 +52,45 @@ jobs:
         run: go vet ./...
       - name: Test with race detector
         run: go test -race -count=1 -v ./...
+
+  integration:
+    strategy:
+      fail-fast: false
+      matrix:
+        # Oldest and newest supported Vault Community versions.
+        vault: ["1.19.5", "2.2.2"]
+    runs-on: ubuntu-latest
+    services:
+      vault:
+        # The official image starts a dev server by default.
+        image: hashicorp/vault:${{ matrix.vault }}
+        env:
+          VAULT_DEV_ROOT_TOKEN_ID: root
+        ports:
+          - 8200:8200
+        options: --cap-add=IPC_LOCK
+    env:
+      MITCH_TEST_VAULT_ADDR: http://127.0.0.1:8200
+      MITCH_TEST_VAULT_ROOT_TOKEN: root
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Wait for Vault ${{ matrix.vault }}
+        run: |
+          for attempt in $(seq 1 30); do
+            status="$(curl --silent --output /dev/null --write-out '%{http_code}' "$MITCH_TEST_VAULT_ADDR/v1/sys/health" || true)"
+            echo "attempt $attempt: sys/health returned HTTP $status"
+            if [ "$status" = "200" ]; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Vault did not become healthy after 30 attempts"
+          exit 1
+      - name: Integration tests against Vault ${{ matrix.vault }}
+        run: go test -tags integration -race -count=1 -v ./...
 
   build:
     strategy:

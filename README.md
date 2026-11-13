@@ -8,7 +8,7 @@ Mitch is a read-only inventory and audit tool for HashiCorp Vault.
 
 People often ask how to run reports in Vault, but Vault is not a CMDB or an inventory tool. Mitch scans a Vault cluster and stores what it finds, so you can answer questions like "how many secrets do we have?", "which plugins were installed by hand?", and "which policies are too broad?"
 
-> **Status:** early development. Nothing here is usable yet.
+> **Status:** early development. `mitch scan` and `mitch policy` work today and print a JSON inventory. Storage, reports, Terraform and policy findings are not built yet. See [Scanning Vault](docs/scanning.md).
 
 ## What Mitch will do
 
@@ -26,6 +26,7 @@ People often ask how to run reports in Vault, but Vault is not a CMDB or an inve
 
 ## Documentation
 
+- [Scanning Vault](docs/scanning.md): policy setup, flags, and output
 - [Design decisions](docs/design-decisions.md) and what each means for you
 - [How Mitch protects your data](docs/data-security.md)
 - [Logging](docs/logging.md)
