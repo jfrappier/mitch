@@ -1,36 +1,47 @@
 # How Mitch protects your data
 
-> **Status:** this describes the planned design. Storage and encryption are not built yet. This page will be updated as each part ships.
->
-> **Today:** `mitch scan` prints its inventory as plain JSON and stores nothing. With `--output`, the file is created readable only by you (`0600`) and Mitch logs a warning that it is plain text. The inventory never contains secret values or KV key and folder names, but it does contain your Vault layout and the full text of every ACL policy, so treat it as sensitive.
+Mitch saves each scan in a local SQLite file, encrypted with a key that only your passphrase can unlock. A stolen database file or a leaked backup is unreadable without the passphrase. To set it up, see [saving-scans.md](saving-scans.md).
+
+> **Not built yet:** changing the passphrase, and typing the passphrase at a prompt. Today the passphrase comes from `MITCH_PASSPHRASE` or `--passphrase-file`.
 
 ## What Mitch stores
 
 - Mount, auth method, plugin, namespace and configuration details from Vault.
 - ACL policy text.
 - The number of secrets and folders in each KV mount. Key and folder names are not stored.
-- Findings and scan history.
+- The Vault address that was scanned.
+
+All of this is encrypted. Only each scan's id and its start, finish and save times are stored in the clear, so `mitch history` can list scans.
 
 ## What Mitch never stores
 
-- Secret values.
+- Secret values. Mitch never reads them.
+- KV key and folder names. Mitch counts them and drops the names.
 - Vault tokens or your passphrase.
 
 ## Why path names are sensitive
 
-Vault's own docs warn that key names are not filtered by policy and can contain sensitive information. An inventory of path names is also a map for an attacker. Mitch treats path names as sensitive data.
+Vault's own docs warn that key names are not filtered by policy and can contain sensitive information ([KV v2 list](https://developer.hashicorp.com/vault/api-docs/secret/kv/kv-v2#list-secrets)). An inventory of path names is also a map for an attacker. Mitch never records them, and redacts them in logs (see [logging.md](logging.md)).
 
 ## Encryption at rest
 
-Disk encryption alone is not enough: it doesn't protect data once the machine is unlocked, or a database copied into a backup. Mitch encrypts sensitive fields itself:
+Disk encryption alone is not enough: it doesn't protect data once the machine is unlocked, or a database copied into a backup. Mitch encrypts the data itself, using envelope encryption:
 
-1. Each database has a random **data key**. Sensitive fields are encrypted with it using AES-GCM from Go's standard library.
-2. The data key is stored only in wrapped (encrypted) form. It is wrapped with a key derived from your **passphrase** using Argon2id.
-3. The passphrase comes from an interactive prompt, or from an environment variable in CI. It is never written to disk or to logs.
-4. Changing the passphrase re-wraps the data key only. The data itself does not need to be re-encrypted.
+1. `mitch init` creates a random 256-bit **data key**. Each scan is encrypted with it using AES-256-GCM from Go's standard library ([crypto/cipher](https://pkg.go.dev/crypto/cipher#NewGCM)), with a fresh random nonce each time.
+2. Each encrypted scan is bound to its scan id. A blob copied onto another row fails to decrypt instead of showing the wrong scan.
+3. The data key is stored only in wrapped (encrypted) form. It is wrapped with a key derived from your **passphrase** using Argon2id ([x/crypto/argon2](https://pkg.go.dev/golang.org/x/crypto/argon2)): time 3, 64 MiB of memory, 4 threads, and a random salt per database. These are RFC 9106's settings for machines that can't spare 2 GiB. They are stored in the file, so later versions can raise them.
+4. Passphrases must be at least 12 characters. A wrong passphrase is rejected before anything is read.
+5. The passphrase is never written to disk or to logs.
 
-The database file is created readable only by its owner (`0600`).
+The database file is created readable only by its owner (`0600`). Mitch warns you if the file or a `--passphrase-file` can be read by other users, with the `chmod` command to fix it.
 
-## Exports
+**A lost passphrase cannot be recovered.** No one, including the Mitch maintainers, can decrypt the scans without it.
 
-JSON and SARIF exports are written in plain text so other tools can read them. Mitch warns you each time it writes one. Treat exported files as sensitive.
+## Plain-text output
+
+Some commands print scan data in plain text, because other tools need to read it. Mitch logs a warning each time:
+
+- `mitch scan --no-save` and `mitch scan --output FILE`
+- `mitch export`
+
+Files are created readable only by you (`0600`). Treat the output as sensitive: it describes your Vault's layout and contains every ACL policy.

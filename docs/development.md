@@ -36,9 +36,11 @@ CI runs all of these on every pull request. See [`.github/workflows/ci.yml`](../
 | `modernc.org/sqlite` | SQLite driver, no cgo | `github.com/ncruces/go-sqlite3` |
 | `golang.org/x/crypto/argon2` | Passphrase key derivation | Standard library `crypto/pbkdf2` |
 
-Each is added in the pull request that first needs it. In use today: `github.com/hashicorp/vault/api`.
+Each is added in the pull request that first needs it. In use today: `github.com/hashicorp/vault/api`, `modernc.org/sqlite` and `golang.org/x/crypto/argon2`.
 
-`vault/api` brings in these indirect dependencies, all pure Go: `cenkalti/backoff`, `go-jose/go-jose`, HashiCorp's `errwrap`, `go-cleanhttp`, `go-multierror`, `go-retryablehttp`, `go-rootcerts`, `go-secure-stdlib`, `go-sockaddr` and `hcl` v1, `mitchellh/go-homedir`, `mitchellh/mapstructure`, `ryanuber/go-glob`, and `golang.org/x/{net,text,time}`. The exact versions are in [`go.mod`](../go.mod).
+`vault/api` brings in these indirect dependencies, all pure Go: `cenkalti/backoff`, `go-jose/go-jose`, HashiCorp's `errwrap`, `go-cleanhttp`, `go-multierror`, `go-retryablehttp`, `go-rootcerts`, `go-secure-stdlib`, `go-sockaddr` and `hcl` v1, `mitchellh/go-homedir`, `mitchellh/mapstructure`, `ryanuber/go-glob`, and `golang.org/x/{net,text,time}`. `modernc.org/sqlite` brings in `modernc.org/{libc,mathutil,memory}`, `dustin/go-humanize`, `google/uuid`, `mattn/go-isatty`, `ncruces/go-strftime`, `remyoudompheng/bigfft` and `golang.org/x/sys`, all pure Go. The exact versions are in [`go.mod`](../go.mod).
+
+`modernc.org/sqlite` must stay on the `modernc.org/libc` version its own `go.mod` names. Upgrade them together with `go get modernc.org/sqlite@<version>` and never bump `libc` on its own ([driver docs](https://pkg.go.dev/modernc.org/sqlite)).
 
 ## Integration tests
 
