@@ -7,6 +7,11 @@ Each decision below says what was chosen, why, and what it means for you as a us
 **Decision:** Mitch never writes to Vault and never reads secret data. It lists paths and reads metadata only.
 **Impact:** You can give Mitch a narrowly scoped token. Secret counts come from listing paths, which takes one request per folder, so large Vaults take longer to scan.
 
+## KV secrets are counted, not named
+
+**Decision:** Mitch counts secrets and folders in every KV v1 and v2 mount by listing key names, one request at a time. It records only the counts per mount, never key or folder names. The policy that allows this, `mitch-scanner-kv`, names each mount exactly instead of using a wildcard. Counting is on by default; `--kv=false` turns it off.
+**Impact:** Folder names, which can reveal what a Vault holds, stay out of the inventory and logs. You run `mitch policy --kv2-mount <mount>` for your KV mounts and update the policy when you add one. Until you do, the scan exits with code 5 and names the command to run.
+
 ## One Go binary, no runtime
 
 **Decision:** Mitch is written in Go and ships as one static binary per platform (macOS arm64/amd64, Linux arm64/amd64, Windows amd64), plus a small Docker image.

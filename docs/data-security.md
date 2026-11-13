@@ -2,13 +2,13 @@
 
 > **Status:** this describes the planned design. Storage and encryption are not built yet. This page will be updated as each part ships.
 >
-> **Today:** `mitch scan` prints its inventory as plain JSON and stores nothing. With `--output`, the file is created readable only by you (`0600`) and Mitch logs a warning that it is plain text. The inventory never contains secret values, but it does contain your Vault layout and the full text of every ACL policy, so treat it as sensitive.
+> **Today:** `mitch scan` prints its inventory as plain JSON and stores nothing. With `--output`, the file is created readable only by you (`0600`) and Mitch logs a warning that it is plain text. The inventory never contains secret values or KV key and folder names, but it does contain your Vault layout and the full text of every ACL policy, so treat it as sensitive.
 
 ## What Mitch stores
 
 - Mount, auth method, plugin, namespace and configuration details from Vault.
 - ACL policy text.
-- Secret **path names** and KV metadata such as version counts and timestamps.
+- The number of secrets and folders in each KV mount. Key and folder names are not stored.
 - Findings and scan history.
 
 ## What Mitch never stores

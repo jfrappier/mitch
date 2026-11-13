@@ -114,7 +114,8 @@ func TestScanWithBasePolicy(t *testing.T) {
 	vault := setUpVault(t)
 	token := vault.createToken(t, checks.BasePolicyName)
 
-	exitCode, inventory, logs := vault.runScanAs(t, token)
+	// KV counting needs its own policy; it is tested separately below.
+	exitCode, inventory, logs := vault.runScanAs(t, token, "--kv=false")
 
 	if exitCode != exitcode.Success {
 		t.Fatalf("expected exit code %d, got %d\nlogs:\n%s", exitcode.Success, exitCode, logs)
@@ -151,13 +152,16 @@ func TestScanWithBasePolicy(t *testing.T) {
 	if !hasPolicyWithText(root.ACLPolicies, checks.BasePolicyName) {
 		t.Errorf("expected policy %q with its text, got %+v", checks.BasePolicyName, root.ACLPolicies)
 	}
+	if root.KVCounts != nil {
+		t.Errorf("expected kv_counts to be null with --kv=false, got %+v", root.KVCounts)
+	}
 }
 
 func TestScanWithSudoFlagButNoSudoPolicy(t *testing.T) {
 	vault := setUpVault(t)
 	token := vault.createToken(t, checks.BasePolicyName)
 
-	exitCode, inventory, logs := vault.runScanAs(t, token, "--sudo")
+	exitCode, inventory, logs := vault.runScanAs(t, token, "--sudo", "--kv=false")
 
 	if exitCode != exitcode.PartialScan {
 		t.Fatalf("expected exit code %d, got %d\nlogs:\n%s", exitcode.PartialScan, exitCode, logs)
@@ -181,7 +185,7 @@ func TestScanWithSudoFlagAndSudoPolicy(t *testing.T) {
 	vault := setUpVault(t)
 	token := vault.createToken(t, checks.BasePolicyName, checks.SudoPolicyName)
 
-	exitCode, inventory, logs := vault.runScanAs(t, token, "--sudo")
+	exitCode, inventory, logs := vault.runScanAs(t, token, "--sudo", "--kv=false")
 
 	if exitCode != exitcode.Success {
 		t.Fatalf("expected exit code %d, got %d\nlogs:\n%s", exitcode.Success, exitCode, logs)
@@ -250,4 +254,190 @@ func hasPolicyWithText(policies []scan.Policy, name string) bool {
 		}
 	}
 	return false
+}
+
+// Test KV mounts. Each KV test recreates them, so earlier runs don't matter.
+const (
+	testKV1Mount = "mitch-it-kv1/"
+	testKV2Mount = "mitch-it-kv2/"
+
+	// hiddenFolder is a folder name that must never appear in logs or output.
+	hiddenFolder = "hidden-folder-name"
+)
+
+// setUpKVMounts creates two KV mounts with known contents:
+//
+//	mitch-it-kv1/ (KV v1): one, f/two                                 -> 2 secrets, 1 folder
+//	mitch-it-kv2/ (KV v2): top (soft-deleted), app/db, app/api,
+//	                       hidden-folder-name/x                       -> 4 secrets, 2 folders
+func (v integrationVault) setUpKVMounts(t *testing.T) {
+	t.Helper()
+
+	mounts := map[string]string{testKV1Mount: "1", testKV2Mount: "2"}
+	for mountPath, kvVersion := range mounts {
+		// Unmounting a path that does not exist succeeds, so this clears
+		// leftovers from an earlier run.
+		err := v.root.Sys().Unmount(mountPath)
+		if err != nil {
+			t.Fatalf("removing old mount %s failed: %v", mountPath, err)
+		}
+		err = v.root.Sys().Mount(mountPath, &vaultapi.MountInput{Type: "kv", Options: map[string]string{"version": kvVersion}})
+		if err != nil {
+			t.Fatalf("enabling KV v%s at %s failed: %v", kvVersion, mountPath, err)
+		}
+		t.Cleanup(func() {
+			_ = v.root.Sys().Unmount(mountPath)
+		})
+	}
+
+	// KV v1 writes go straight to the path.
+	for _, secretPath := range []string{"one", "f/two"} {
+		_, err := v.root.Logical().Write(testKV1Mount+secretPath, map[string]any{"value": "x"})
+		if err != nil {
+			t.Fatalf("writing %s%s failed: %v", testKV1Mount, secretPath, err)
+		}
+	}
+
+	// KV v2 writes go to <mount>/data/<path>, wrapped in "data".
+	for _, secretPath := range []string{"top", "app/db", "app/api", hiddenFolder + "/x"} {
+		_, err := v.root.Logical().Write(testKV2Mount+"data/"+secretPath, map[string]any{"data": map[string]any{"value": "x"}})
+		if err != nil {
+			t.Fatalf("writing %sdata/%s failed: %v", testKV2Mount, secretPath, err)
+		}
+	}
+
+	// Soft-delete "top": its metadata stays, so it is still counted.
+	_, err := v.root.Logical().Delete(testKV2Mount + "data/top")
+	if err != nil {
+		t.Fatalf("soft-deleting %sdata/top failed: %v", testKV2Mount, err)
+	}
+}
+
+// allKVMounts returns every KV mount in the root namespace, so tests can
+// grant list on all of them and expect a clean scan.
+func (v integrationVault) allKVMounts(t *testing.T) []checks.KVMount {
+	t.Helper()
+
+	mounts, err := v.root.Sys().ListMounts()
+	if err != nil {
+		t.Fatalf("listing mounts failed: %v", err)
+	}
+
+	kvMounts := []checks.KVMount{}
+	for mountPath, mount := range mounts {
+		if mount.Type != "kv" {
+			continue
+		}
+		kvVersion := 1
+		if mount.Options["version"] == "2" {
+			kvVersion = 2
+		}
+		kvMounts = append(kvMounts, checks.KVMount{Path: mountPath, Version: kvVersion})
+	}
+	return kvMounts
+}
+
+// kvCount finds one mount's count in the root namespace.
+func kvCount(t *testing.T, inventory *scan.Inventory, mountPath string) scan.KVCount {
+	t.Helper()
+	for _, count := range inventory.Namespaces[0].KVCounts {
+		if count.Mount == mountPath {
+			return count
+		}
+	}
+	t.Fatalf("no kv_counts entry for %s; got %+v", mountPath, inventory.Namespaces[0].KVCounts)
+	return scan.KVCount{}
+}
+
+func TestScanCountsKVSecrets(t *testing.T) {
+	vault := setUpVault(t)
+	vault.setUpKVMounts(t)
+
+	err := vault.root.Sys().PutPolicy(checks.KVPolicyName, checks.RenderKVPolicy(vault.allKVMounts(t)))
+	if err != nil {
+		t.Fatalf("writing the %s policy failed: %v", checks.KVPolicyName, err)
+	}
+	token := vault.createToken(t, checks.BasePolicyName, checks.KVPolicyName)
+
+	exitCode, inventory, logs := vault.runScanAs(t, token)
+
+	if exitCode != exitcode.Success {
+		t.Fatalf("expected exit code %d, got %d\nskipped: %+v\nlogs:\n%s", exitcode.Success, exitCode, inventory.Skipped, logs)
+	}
+
+	expectedV1 := scan.KVCount{Mount: testKV1Mount, KVVersion: 1, Secrets: 2, Folders: 1, Complete: true}
+	if got := kvCount(t, inventory, testKV1Mount); got != expectedV1 {
+		t.Errorf("KV v1: expected %+v, got %+v", expectedV1, got)
+	}
+	expectedV2 := scan.KVCount{Mount: testKV2Mount, KVVersion: 2, Secrets: 4, Folders: 2, Complete: true}
+	if got := kvCount(t, inventory, testKV2Mount); got != expectedV2 {
+		t.Errorf("KV v2: expected %+v, got %+v", expectedV2, got)
+	}
+}
+
+func TestScanKVWithoutKVPolicyIsPartial(t *testing.T) {
+	vault := setUpVault(t)
+	vault.setUpKVMounts(t)
+	token := vault.createToken(t, checks.BasePolicyName)
+
+	exitCode, inventory, logs := vault.runScanAs(t, token)
+
+	if exitCode != exitcode.PartialScan {
+		t.Fatalf("expected exit code %d, got %d\nlogs:\n%s", exitcode.PartialScan, exitCode, logs)
+	}
+	if got := kvCount(t, inventory, testKV2Mount); got.Complete {
+		t.Errorf("expected an incomplete count without the KV policy, got %+v", got)
+	}
+	if !strings.Contains(logs, "mitch policy --kv2-mount "+testKV2Mount) {
+		t.Errorf("expected the exact policy command in the logs\nlogs:\n%s", logs)
+	}
+}
+
+func TestScanKVPartialPolicyIsIncompleteAndRedacted(t *testing.T) {
+	vault := setUpVault(t)
+	vault.setUpKVMounts(t)
+
+	// Grant list on every KV mount except one folder of the test KV v2 mount:
+	// the top of the mount and app/ only.
+	otherMounts := []checks.KVMount{}
+	for _, mount := range vault.allKVMounts(t) {
+		if mount.Path != testKV2Mount {
+			otherMounts = append(otherMounts, mount)
+		}
+	}
+	partialPolicy := checks.RenderKVPolicy(otherMounts) +
+		`path "` + testKV2Mount + `metadata/" { capabilities = ["list"] }` + "\n" +
+		`path "` + testKV2Mount + `metadata/app/*" { capabilities = ["list"] }` + "\n"
+	err := vault.root.Sys().PutPolicy("mitch-test-kv-partial", partialPolicy)
+	if err != nil {
+		t.Fatalf("writing the partial KV policy failed: %v", err)
+	}
+	token := vault.createToken(t, checks.BasePolicyName, "mitch-test-kv-partial")
+
+	exitCode, inventory, logs := vault.runScanAs(t, token)
+
+	if exitCode != exitcode.PartialScan {
+		t.Fatalf("expected exit code %d, got %d\nlogs:\n%s", exitcode.PartialScan, exitCode, logs)
+	}
+
+	// top, app/db and app/api are counted; hidden-folder-name/ is found but cannot be listed.
+	expected := scan.KVCount{Mount: testKV2Mount, KVVersion: 2, Secrets: 3, Folders: 2, Complete: false}
+	if got := kvCount(t, inventory, testKV2Mount); got != expected {
+		t.Errorf("expected %+v, got %+v", expected, got)
+	}
+
+	foundSkip := false
+	for _, skipped := range inventory.Skipped {
+		if skipped.Check == checks.CheckKVCount && skipped.Path == testKV2Mount+"metadata/*" && skipped.HTTPStatus == 403 {
+			foundSkip = true
+		}
+	}
+	if !foundSkip {
+		t.Errorf("expected a 403 skip for %smetadata/*, got %+v", testKV2Mount, inventory.Skipped)
+	}
+
+	encoded, _ := json.Marshal(inventory)
+	if strings.Contains(logs, hiddenFolder) || strings.Contains(string(encoded), hiddenFolder) {
+		t.Errorf("folder name %q leaked into the logs or the inventory\nlogs:\n%s", hiddenFolder, logs)
+	}
 }

@@ -227,3 +227,55 @@ func TestNotFoundWithMessageIsStillAnError(t *testing.T) {
 		t.Errorf("expected Vault's message in the error, got %v", err)
 	}
 }
+
+func TestListRedactedHidesPathOnHTTPError(t *testing.T) {
+	client, logOutput := newTestClient(t, func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusForbidden)
+		io.WriteString(writer, `{"errors":["permission denied"]}`)
+	})
+
+	_, err := client.ListRedacted(context.Background(), "list_kv_keys", "", "secret/metadata/payroll/", "secret/metadata/<redacted>")
+	if err == nil {
+		t.Fatal("expected an error for HTTP 403, got none")
+	}
+
+	for _, output := range []string{err.Error(), logOutput.String()} {
+		if strings.Contains(output, "payroll") {
+			t.Errorf("the real path leaked:\n%s", output)
+		}
+		if !strings.Contains(output, "secret/metadata/<redacted>") {
+			t.Errorf("expected the display path in:\n%s", output)
+		}
+	}
+}
+
+func TestListRedactedHidesPathWhenVaultNeverAnswers(t *testing.T) {
+	config := vaultapi.DefaultConfig()
+	config.Address = "http://127.0.0.1:1" // nothing listens on port 1
+	config.MaxRetries = 0
+	apiClient, err := vaultapi.NewClient(config)
+	if err != nil {
+		t.Fatalf("creating the official client failed: %v", err)
+	}
+	apiClient.SetToken("test-token")
+
+	var logOutput bytes.Buffer
+	logger, _ := logging.New(logging.Options{Output: &logOutput, Format: logging.FormatText, Level: logging.LevelDebug})
+	client := NewFromAPIClient(apiClient, logger)
+
+	// "pay roll" has a space, so the URL carries it escaped as "pay%20roll".
+	_, err = client.ListRedacted(context.Background(), "list_kv_keys", "", "secret/metadata/pay roll/", "secret/metadata/<redacted>")
+	if err == nil {
+		t.Fatal("expected an error when nothing answers, got none")
+	}
+
+	requestError, found := AsRequestError(err)
+	if !found || requestError.StatusCode != 0 {
+		t.Fatalf("expected a RequestError with status 0, got %v", err)
+	}
+	for _, output := range []string{err.Error(), logOutput.String()} {
+		if strings.Contains(output, "pay") {
+			t.Errorf("the real path leaked:\n%s", output)
+		}
+	}
+}

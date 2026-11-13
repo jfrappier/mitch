@@ -127,6 +127,35 @@ type NamespaceInventory struct {
 	SecretsEngines []Mount  `json:"secrets_engines"`
 	AuthMethods    []Mount  `json:"auth_methods"`
 	ACLPolicies    []Policy `json:"acl_policies"`
+
+	// KVCounts has one entry per KV mount in this namespace.
+	// null means "not collected" (counting was turned off, or the secrets
+	// engines could not be read); an empty list means "no KV mounts".
+	KVCounts []KVCount `json:"kv_counts"`
+}
+
+// KVCount is how many secrets and folders one KV mount holds.
+//
+// Mitch finds these by listing key names, folder by folder. It never reads
+// secret values, and it does not record key or folder names.
+type KVCount struct {
+	// Mount is the mount path, for example "secret/".
+	Mount string `json:"mount"`
+
+	// KVVersion is 1 or 2.
+	KVVersion int `json:"kv_version"`
+
+	// Secrets is the number of keys found. For KV v2 this includes secrets
+	// whose versions were all deleted but whose metadata still exists.
+	Secrets int `json:"secrets"`
+
+	// Folders is the number of folders found under the mount.
+	Folders int `json:"folders"`
+
+	// Complete is false when part of the mount could not be listed, for
+	// example because the policy does not cover it. The counts are then a
+	// lower bound, and the reason is in the inventory's "skipped" list.
+	Complete bool `json:"complete"`
 }
 
 // Mount is one secrets engine or auth method, from GET sys/mounts or GET sys/auth.
