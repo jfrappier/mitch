@@ -1,0 +1,9 @@
+# Build output
+/dist/
+/mitch
+*.exe
+
+# Local scan databases must never be committed
+*.db
+*.sqlite
+*.sqlite3
