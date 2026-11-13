@@ -53,7 +53,7 @@ func commands() []command {
 		{name: "scan", summary: "Scan a Vault cluster and save the inventory (--no-save prints JSON instead)", run: runScan},
 		{name: "history", summary: "List saved scans", run: runHistory},
 		{name: "report", summary: "Show reports from stored scans (not built yet)", run: notImplemented("report")},
-		{name: "diff", summary: "Show what changed between two scans (not built yet)", run: notImplemented("diff")},
+		{name: "diff", summary: "Show what changed between two saved scans", run: runDiff},
 		{name: "export", summary: "Print a saved scan as JSON (SARIF not built yet)", run: runExport},
 		{name: "terraform", summary: "Generate Terraform for the scanned Vault config (not built yet)", run: notImplemented("terraform")},
 		{name: "policy", summary: "Print the Vault policy Mitch needs (--sudo or --kv2-mount for add-ons)", run: runPolicy},

@@ -26,6 +26,7 @@ import (
 	vaultapi "github.com/hashicorp/vault/api"
 
 	"github.com/jfrappier/mitch/internal/checks"
+	"github.com/jfrappier/mitch/internal/diff"
 	"github.com/jfrappier/mitch/internal/exitcode"
 	"github.com/jfrappier/mitch/internal/scan"
 )
@@ -486,4 +487,81 @@ func TestScanSavesEncryptedAndExportsBack(t *testing.T) {
 	if inventory.VaultAddress != vault.address || !hasMount(inventory.Namespaces[0].SecretsEngines, "secret/") {
 		t.Errorf("the export does not match the scan: address %q, mounts %+v", inventory.VaultAddress, inventory.Namespaces[0].SecretsEngines)
 	}
+}
+
+func TestDiffShowsChangesBetweenTwoRealScans(t *testing.T) {
+	vault := setUpVault(t)
+	token := vault.createToken(t, checks.BasePolicyName)
+	testDatabase(t)
+
+	exitCode, _, stderr := runForTest("init")
+	if exitCode != exitcode.Success {
+		t.Fatalf("init failed: exit %d\nstderr: %s", exitCode, stderr)
+	}
+
+	t.Setenv("VAULT_ADDR", vault.address)
+	t.Setenv("VAULT_TOKEN", token)
+	t.Setenv("VAULT_NAMESPACE", "")
+
+	// The first scan, before anything changes.
+	exitCode, firstOutput, stderr := runForTest("scan", "--kv=false")
+	if exitCode != exitcode.Success {
+		t.Fatalf("first scan failed: exit %d\nstderr: %s", exitCode, stderr)
+	}
+
+	// Change Vault: enable a mount and add a policy. Both are removed again
+	// when the test ends, so other tests see a clean server.
+	const mountPath = "mitch-diff-test"
+	const policyName = "mitch-diff-test"
+	err := vault.root.Sys().Mount(mountPath, &vaultapi.MountInput{Type: "kv", Description: "added by the diff test"})
+	if err != nil {
+		t.Fatalf("enabling the %s mount failed: %v", mountPath, err)
+	}
+	t.Cleanup(func() { _ = vault.root.Sys().Unmount(mountPath) })
+	err = vault.root.Sys().PutPolicy(policyName, `path "mitch-diff-test/*" { capabilities = ["read"] }`)
+	if err != nil {
+		t.Fatalf("writing the %s policy failed: %v", policyName, err)
+	}
+	t.Cleanup(func() { _ = vault.root.Sys().DeletePolicy(policyName) })
+
+	// The second scan, after the change.
+	exitCode, secondOutput, stderr := runForTest("scan", "--kv=false")
+	if exitCode != exitcode.Success {
+		t.Fatalf("second scan failed: exit %d\nstderr: %s", exitCode, stderr)
+	}
+
+	exitCode, stdout, stderr := runForTest("diff", "--format", "json")
+	if exitCode != exitcode.Success {
+		t.Fatalf("diff failed: exit %d\nstderr: %s", exitCode, stderr)
+	}
+	var result diff.Result
+	err = json.Unmarshal([]byte(stdout), &result)
+	if err != nil {
+		t.Fatalf("the diff is not valid JSON: %v\n%s", err, stdout)
+	}
+
+	if result.From.ID != strings.TrimSpace(firstOutput) || result.To.ID != strings.TrimSpace(secondOutput) {
+		t.Errorf("expected the diff to compare the two scans in order, got %s -> %s", result.From.ID, result.To.ID)
+	}
+	if !sectionAdded(result, diff.SectionSecretsEngines, mountPath+"/ (kv)") {
+		t.Errorf("expected %s/ to be added:\n%s", mountPath, stdout)
+	}
+	if !sectionAdded(result, diff.SectionACLPolicies, policyName) {
+		t.Errorf("expected the %s policy to be added:\n%s", policyName, stdout)
+	}
+}
+
+// sectionAdded reports whether a root-namespace section lists label as added.
+func sectionAdded(result diff.Result, sectionName string, label string) bool {
+	for _, section := range result.Sections {
+		if section.Name != sectionName {
+			continue
+		}
+		for _, added := range section.Added {
+			if added == label {
+				return true
+			}
+		}
+	}
+	return false
 }

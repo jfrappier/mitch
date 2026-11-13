@@ -22,6 +22,11 @@ Each decision below says what was chosen, why, and what it means for you as a us
 **Decision:** Scan results are stored in a local SQLite file. Each scan is encrypted as a whole by Mitch, with a key derived from your passphrase; only ids and timestamps stay in the clear. `mitch scan` saves by default and unlocks the database before contacting Vault. See [data-security.md](data-security.md).
 **Impact:** A stolen database file or backup is unreadable without the passphrase. If you lose the passphrase, your scan history cannot be recovered. Run `mitch init` once before your first scan, or use `--no-save` for a one-off JSON inventory.
 
+## Diffs compare saved scans only
+
+**Decision:** `mitch diff` compares two saved scans. It never contacts Vault, and it lists a warning instead of guessing when a scan skipped checks or left a part out.
+**Impact:** Save a scan before and after a change to see what changed. If a scan was partial, read the warnings before trusting a "removed" line.
+
 ## Git as the source of truth
 
 **Decision:** Mitch recommends that all Vault policies live in git as HCL files used by Terraform, and that all Vault configuration is Terraform. You point Mitch at a local checkout; Mitch never clones or holds git credentials.
