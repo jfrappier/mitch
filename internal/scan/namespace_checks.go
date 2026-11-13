@@ -72,6 +72,17 @@ func (s *Scanner) scanNamespace(ctx context.Context, namespace string) (Namespac
 	}
 	result.SecretsEngines = secretsEngines
 
+	// Counting needs the list of secrets engines to find the KV mounts, so
+	// it only runs when that list was read.
+	secretsEnginesWereRead := !s.wasSkipped(checks.CheckMounts, namespace)
+	if s.options.CountKV && secretsEnginesWereRead {
+		kvCounts, err := s.countKVSecrets(ctx, namespace, secretsEngines)
+		if err != nil {
+			return result, err
+		}
+		result.KVCounts = kvCounts
+	}
+
 	authMethods, err := s.readMounts(ctx, namespace, checks.CheckAuthMethods, "list_auth_methods", "sys/auth")
 	if err != nil {
 		return result, err

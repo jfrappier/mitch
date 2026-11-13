@@ -2,7 +2,7 @@
 
 `mitch scan` reads a Vault cluster and prints a JSON inventory of what it found. It never writes to Vault and never reads secret values.
 
-> **Not built yet:** counting secrets under KV paths, storing scans, and comparing scans. Today the inventory is printed as JSON.
+> **Not built yet:** storing scans and comparing scans. Today the inventory is printed as JSON.
 
 ## 1. Create the Mitch policy and token
 
@@ -15,6 +15,22 @@ vault token create -policy=mitch-scanner -ttl=1h
 ```
 
 The base policy grants only `read` and `list` on the endpoints Mitch uses, plus `update` on `sys/capabilities-self` so Mitch can check its own permissions before scanning. It never grants `sudo` and never grants access to secret data.
+
+### KV secret counts
+
+Mitch counts the secrets in each KV mount by listing key names. To allow that, print a policy that names your KV mounts. Use `--kv2-mount` for KV version 2 mounts and `--kv1-mount` for version 1, and repeat the flag for each mount:
+
+```shell
+mitch policy --kv2-mount secret/ --kv1-mount legacy/ > mitch-scanner-kv.hcl
+vault policy write mitch-scanner-kv mitch-scanner-kv.hcl
+vault token create -policy=mitch-scanner -policy=mitch-scanner-kv -ttl=1h
+```
+
+`vault secrets list -detailed` shows each mount's KV version in its options column.
+
+The policy grants only `list`: on `<mount>/metadata/*` for KV v2 and on `<mount>/*` for KV v1. Listing returns key names, never values ([KV v2 list](https://developer.hashicorp.com/vault/api-docs/secret/kv/kv-v2#list-secrets), [KV v1 list](https://developer.hashicorp.com/vault/api-docs/secret/kv/kv-v1#list-secrets)). It names each mount exactly instead of using a wildcard, so add a mount to the policy when you create one. Until you do, the scan skips that mount, exits with code 5, and logs the exact `mitch policy` command to run.
+
+On Vault Enterprise, write this policy in the namespace that holds the mounts.
 
 ### Optional: sudo checks
 
@@ -42,6 +58,7 @@ mitch scan --output inventory.json
 | Flag | Default | Meaning |
 | --- | --- | --- |
 | `--sudo` | off | Also run checks that need `sudo`. |
+| `--kv` | on | Count secrets in KV mounts. `--kv=false` turns it off. |
 | `--output FILE` | standard output | Write the JSON to a file. The file is created readable only by you (`0600`). |
 | `--timeout DURATION` | `10m` | Stop the scan if it takes longer than this, for example `30s` or `1h`. |
 
@@ -53,16 +70,19 @@ mitch scan --output inventory.json
 2. **Preflight:** asks `sys/capabilities-self` which grants the token has. Each missing grant is logged as a warning, and that check is skipped instead of failing later. If the token cannot call `sys/capabilities-self`, Mitch tries every check and records each failure.
 3. **Cluster-wide checks** (root namespace only): sanitized server config, version history, plugin catalog, and with `--sudo`, audit devices, registered plugin details and plugin runtimes.
 4. **Per-namespace checks:** secrets engines, auth methods, and ACL policies with their text. On Vault Enterprise, Mitch walks the namespace tree and repeats these in every namespace.
+5. **KV secret counts** (per namespace, unless `--kv=false`): checks that the token can list each KV mount, then lists every folder in it, one request at a time. A folder it cannot list is counted as a failure and the rest of the mount is still counted.
+
+Large KV mounts take one request per folder. If a scan hits `--timeout`, raise it or count with `--kv=false` first to see the rest of the inventory.
 
 ## Exit codes and skipped checks
 
 | Result | Exit code |
 | --- | --- |
 | Every check ran | 0 |
-| Some checks were skipped (missing grant, HTTP 403 or 404) | 5 |
+| Some checks were skipped (missing grant, HTTP 403 or 404), or a KV mount was only partly counted | 5 |
 | The scan could not run (no token, Vault unreachable, sealed, HTTP 5xx) | 1 |
 
-Every skipped check is listed in the JSON under `skipped` and logged as a `check skipped` warning with the HTTP status and the next step. Checks left out on purpose, such as sudo checks without `--sudo` or Enterprise checks on Vault Community, are listed under `not_requested` and do not change the exit code. See [exit-codes.md](exit-codes.md).
+Every skipped check is listed in the JSON under `skipped` and logged as a `check skipped` warning with the HTTP status and the next step. A KV mount gets one `skipped` entry no matter how many of its folders failed. Checks left out on purpose, such as sudo checks without `--sudo`, KV counts with `--kv=false`, or Enterprise checks on Vault Community, are listed under `not_requested` and do not change the exit code. See [exit-codes.md](exit-codes.md).
 
 ## Output
 
@@ -76,8 +96,19 @@ The inventory is JSON with these top-level fields:
 | `version_history` | Every Vault version this cluster has run |
 | `plugins` | Every plugin, with `builtin` true or false; with `--sudo`, registered plugins also have `sha256`, `command` and `args` |
 | `audit_devices`, `plugin_runtimes` | Only with `--sudo`. `null` means not collected; `[]` means collected and none found |
-| `namespaces` | Per namespace: `secrets_engines`, `auth_methods`, `acl_policies`. The root namespace is first, with path `""` |
+| `namespaces` | Per namespace: `secrets_engines`, `auth_methods`, `acl_policies`, `kv_counts`. The root namespace is first, with path `""` |
 | `skipped`, `not_requested` | See above |
+
+Each `kv_counts` entry looks like this:
+
+```json
+{ "mount": "secret/", "kv_version": 2, "secrets": 4, "folders": 2, "complete": true }
+```
+
+- `secrets` counts keys. For KV v2 this includes secrets whose versions were all deleted but whose metadata still exists.
+- `complete` is `false` when some folders could not be listed. The counts are then a lower bound, and the reason is under `skipped`.
+- `kv_counts` is `null` when counting was off or the namespace's secrets engines could not be read, and `[]` when the namespace has no KV mounts.
+- Key and folder names are never recorded.
 
 The inventory is plain text. Treat it as sensitive: it describes your Vault's layout and contains every ACL policy. See [data-security.md](data-security.md).
 

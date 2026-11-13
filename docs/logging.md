@@ -41,4 +41,4 @@ Set the lowest level written with `--log-level debug|info|warn|error`. The defau
 
 ## What is never logged
 
-Mitch never logs secret values or Vault tokens. Secret path names are redacted by default, because path names can reveal what a Vault holds.
+Mitch never logs secret values or Vault tokens. Folder and key names inside KV mounts are always redacted, because they can reveal what a Vault holds. A failed list inside a mount is logged as, for example, `path=secret/metadata/<redacted>`. Mount paths are not redacted, because they are already in the inventory.

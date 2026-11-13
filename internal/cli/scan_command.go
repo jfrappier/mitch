@@ -22,7 +22,7 @@ const outputFileMode = 0o600
 
 // runScan scans Vault and prints the inventory as JSON.
 //
-//	mitch scan [--sudo] [--output FILE] [--timeout DURATION]
+//	mitch scan [--sudo] [--kv=false] [--output FILE] [--timeout DURATION]
 //
 // Vault connection settings come from VAULT_ADDR, VAULT_TOKEN and the other
 // standard Vault environment variables.
@@ -34,6 +34,7 @@ func runScan(runContext runContext, arguments []string) int {
 	flags.SetOutput(runContext.stderr)
 
 	sudo := flags.Bool("sudo", false, "also run checks that need the sudo capability (attach the mitch-scanner-sudo policy)")
+	countKV := flags.Bool("kv", true, "count secrets in KV mounts by listing key names (never values); --kv=false turns it off")
 	outputPath := flags.String("output", "", "write the JSON inventory to this file instead of standard output")
 	timeout := flags.Duration("timeout", 10*time.Minute, "stop the scan if it takes longer than this")
 
@@ -65,7 +66,7 @@ func runScan(runContext runContext, arguments []string) int {
 	scanContext, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
 
-	scanner := scan.New(client, runContext.logger, scan.Options{Sudo: *sudo, MitchVersion: version.Version})
+	scanner := scan.New(client, runContext.logger, scan.Options{Sudo: *sudo, CountKV: *countKV, MitchVersion: version.Version})
 	inventory, err := scanner.Run(scanContext)
 	if err != nil {
 		scanLogger.Error("scan failed",

@@ -22,6 +22,9 @@ type Options struct {
 	// Sudo turns on the checks that need the sudo capability.
 	Sudo bool
 
+	// CountKV turns on counting secrets in KV mounts.
+	CountKV bool
+
 	// MitchVersion is recorded in the inventory.
 	MitchVersion string
 }
@@ -69,7 +72,7 @@ func (s *Scanner) Run(ctx context.Context) (*Inventory, error) {
 		NotRequested:   []NotRequestedCheck{},
 	}
 
-	s.logger.Info("scan started", logging.FieldOperation, "scan", "vault_address", s.client.Address(), "sudo", s.options.Sudo)
+	s.logger.Info("scan started", logging.FieldOperation, "scan", "vault_address", s.client.Address(), "sudo", s.options.Sudo, "count_kv", s.options.CountKV)
 
 	// Step 1: health. This tells us the version and edition, and stops the
 	// scan early if Vault is sealed.
@@ -163,6 +166,13 @@ func (s *Scanner) readHealth(ctx context.Context) error {
 
 // recordNotRequested lists the checks that will not run on purpose.
 func (s *Scanner) recordNotRequested() {
+	if !s.options.CountKV {
+		s.inventory.NotRequested = append(s.inventory.NotRequested, NotRequestedCheck{
+			Check:  checks.CheckKVCount,
+			Reason: "counting secrets in KV mounts was turned off",
+		})
+	}
+
 	for _, check := range checks.All() {
 		if check.NeedsSudo && !s.options.Sudo {
 			s.inventory.NotRequested = append(s.inventory.NotRequested, NotRequestedCheck{
@@ -320,6 +330,16 @@ func (s *Scanner) handleFailure(checkName string, namespace string, err error) e
 		NextStep:   requestError.NextStep,
 	})
 	return nil
+}
+
+// wasSkipped reports whether a check was recorded as skipped in a namespace.
+func (s *Scanner) wasSkipped(checkName string, namespace string) bool {
+	for _, skipped := range s.inventory.Skipped {
+		if skipped.Check == checkName && skipped.Namespace == namespace {
+			return true
+		}
+	}
+	return false
 }
 
 // allowedKey builds the map key for one namespace and check.

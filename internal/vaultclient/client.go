@@ -131,6 +131,23 @@ func (c *Client) List(ctx context.Context, operation string, namespace string, p
 	return c.send(ctx, operation, namespace, methodList, path, nil, nil)
 }
 
+// ListRedacted lists the keys under a path, like List, but never shows the
+// real path in logs or errors. displayPath is shown instead, for example
+// "secret/metadata/<redacted>".
+//
+// Mitch uses this for folders inside KV mounts, because folder names can
+// reveal what a Vault holds (see docs/logging.md).
+func (c *Client) ListRedacted(ctx context.Context, operation string, namespace string, path string, displayPath string) (*Response, error) {
+	request := request{
+		operation:   operation,
+		namespace:   namespace,
+		method:      methodList,
+		path:        path,
+		displayPath: displayPath,
+	}
+	return c.sendRequest(ctx, request)
+}
+
 // CheckOwnCapabilities sends PUT /v1/sys/capabilities-self, which returns
 // the capabilities the current token has on each of the given paths.
 // It changes nothing in Vault.
@@ -141,10 +158,51 @@ func (c *Client) CheckOwnCapabilities(ctx context.Context, namespace string, pat
 	return c.send(ctx, "check_own_capabilities", namespace, methodPut, "sys/capabilities-self", nil, body)
 }
 
-// send does the actual HTTP call, logs it, and turns failures into a RequestError.
-// query and body are optional; pass nil when not needed.
+// request is one Vault call, as passed to sendRequest.
+type request struct {
+	operation string
+	namespace string
+	method    string
+	path      string
+
+	// displayPath is what logs and errors show instead of path.
+	// Empty means show the real path.
+	displayPath string
+
+	// query and body are optional.
+	query url.Values
+	body  any
+}
+
+// send is a shorthand for sendRequest when the real path may be shown.
 func (c *Client) send(ctx context.Context, operation string, namespace string, method string, path string, query url.Values, body any) (*Response, error) {
-	cleanPath := strings.TrimPrefix(path, "/")
+	request := request{
+		operation: operation,
+		namespace: namespace,
+		method:    method,
+		path:      path,
+		query:     query,
+		body:      body,
+	}
+	return c.sendRequest(ctx, request)
+}
+
+// sendRequest does the actual HTTP call, logs it, and turns failures into a
+// RequestError.
+func (c *Client) sendRequest(ctx context.Context, request request) (*Response, error) {
+	operation := request.operation
+	namespace := request.namespace
+	method := request.method
+	query := request.query
+	body := request.body
+
+	cleanPath := strings.TrimPrefix(request.path, "/")
+
+	// shownPath is the only path that may appear in logs and errors.
+	shownPath := cleanPath
+	if request.displayPath != "" {
+		shownPath = request.displayPath
+	}
 
 	// Always choose the namespace explicitly, so a VAULT_NAMESPACE environment
 	// variable can never silently send a request somewhere else.
@@ -191,7 +249,7 @@ func (c *Client) send(ctx context.Context, operation string, namespace string, m
 	}
 
 	if requestErr != nil {
-		failure := newRequestError(operation, method, cleanPath, namespace, statusCode, requestErr)
+		failure := newRequestError(operation, method, shownPath, namespace, statusCode, redactCause(requestErr, cleanPath, shownPath))
 
 		// An empty LIST comes back as HTTP 404 with no error messages.
 		// That is a normal "no keys" answer, not a failure.
@@ -200,7 +258,7 @@ func (c *Client) send(ctx context.Context, operation string, namespace string, m
 			c.logger.Debug("vault returned an empty list",
 				logging.FieldOperation, operation,
 				"method", method,
-				"path", cleanPath,
+				"path", shownPath,
 				"namespace", namespaceForLog(namespace),
 				logging.FieldHTTPStatus, failure.StatusCode,
 				logging.FieldDurationMS, durationMS,
@@ -215,7 +273,7 @@ func (c *Client) send(ctx context.Context, operation string, namespace string, m
 		c.logger.Warn("vault request failed",
 			logging.FieldOperation, operation,
 			"method", method,
-			"path", cleanPath,
+			"path", shownPath,
 			"namespace", namespaceForLog(namespace),
 			logging.FieldHTTPStatus, failure.StatusCode,
 			logging.FieldDurationMS, durationMS,
@@ -227,7 +285,7 @@ func (c *Client) send(ctx context.Context, operation string, namespace string, m
 	c.logger.Debug("vault request succeeded",
 		logging.FieldOperation, operation,
 		"method", method,
-		"path", cleanPath,
+		"path", shownPath,
 		"namespace", namespaceForLog(namespace),
 		logging.FieldHTTPStatus, statusCode,
 		logging.FieldDurationMS, durationMS,
@@ -244,7 +302,7 @@ func (c *Client) send(ctx context.Context, operation string, namespace string, m
 	err := rawResponse.DecodeJSON(&wholeBody)
 	if err != nil {
 		return nil, fmt.Errorf("vault client: %s: Vault returned HTTP %d for %s %s but the body was not valid JSON: %w",
-			operation, statusCode, method, cleanPath, err)
+			operation, statusCode, method, shownPath, err)
 	}
 
 	var envelope struct {
@@ -253,7 +311,7 @@ func (c *Client) send(ctx context.Context, operation string, namespace string, m
 	err = json.Unmarshal(wholeBody, &envelope)
 	if err != nil {
 		return nil, fmt.Errorf("vault client: %s: Vault returned HTTP %d for %s %s but the body was not a JSON object: %w",
-			operation, statusCode, method, cleanPath, err)
+			operation, statusCode, method, shownPath, err)
 	}
 
 	response := &Response{
@@ -262,6 +320,52 @@ func (c *Client) send(ctx context.Context, operation string, namespace string, m
 		Data:       envelope.Data,
 	}
 	return response, nil
+}
+
+// redactCause hides the real path inside an error from the HTTP client.
+// When Vault never answers, that error includes the full request URL, which
+// would otherwise put a redacted path back into the logs.
+func redactCause(cause error, realPath string, shownPath string) error {
+	if cause == nil || realPath == shownPath {
+		return cause
+	}
+
+	// The URL can carry the path as typed or with special characters
+	// escaped, and the official client drops a trailing slash.
+	pathWithoutSlash := strings.TrimSuffix(realPath, "/")
+	formsToHide := []string{
+		realPath,
+		pathWithoutSlash,
+		(&url.URL{Path: realPath}).EscapedPath(),
+		(&url.URL{Path: pathWithoutSlash}).EscapedPath(),
+	}
+
+	text := cause.Error()
+	for _, form := range formsToHide {
+		if form != "" {
+			text = strings.ReplaceAll(text, form, shownPath)
+		}
+	}
+
+	return &redactedError{text: text, original: cause}
+}
+
+// redactedError is an error whose message has the real path replaced.
+// Unwrap still returns the original, so errors.As can find Vault's own
+// error messages, which never contain the request path.
+type redactedError struct {
+	text     string
+	original error
+}
+
+// Error returns the redacted message.
+func (e *redactedError) Error() string {
+	return e.text
+}
+
+// Unwrap returns the original error.
+func (e *redactedError) Unwrap() error {
+	return e.original
 }
 
 // closeBody closes a response body. A failure to close only leaks a

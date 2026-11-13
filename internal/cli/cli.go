@@ -54,7 +54,7 @@ func commands() []command {
 		{name: "diff", summary: "Show what changed between two scans (not built yet)", run: notImplemented("diff")},
 		{name: "export", summary: "Export scan results as JSON or SARIF (not built yet)", run: notImplemented("export")},
 		{name: "terraform", summary: "Generate Terraform for the scanned Vault config (not built yet)", run: notImplemented("terraform")},
-		{name: "policy", summary: "Print the Vault policy Mitch needs (--sudo for the add-on)", run: runPolicy},
+		{name: "policy", summary: "Print the Vault policy Mitch needs (--sudo or --kv2-mount for add-ons)", run: runPolicy},
 		{name: "serve", summary: "Start the local read-only web UI (not built yet)", run: notImplemented("serve")},
 		{name: "version", summary: "Print the Mitch version", run: runVersion},
 		{name: "help", summary: "Show this help", run: runHelp},

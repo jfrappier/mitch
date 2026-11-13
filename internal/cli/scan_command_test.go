@@ -31,6 +31,41 @@ func TestPolicySudoPrintsAddOn(t *testing.T) {
 	}
 }
 
+func TestPolicyKVMountsPrintsKVPolicy(t *testing.T) {
+	exitCode, stdout, stderr := runForTest("policy", "--kv2-mount", "secret", "--kv1-mount", "/legacy/")
+
+	if exitCode != exitcode.Success {
+		t.Fatalf("expected exit code %d, got %d\nstderr: %s", exitcode.Success, exitCode, stderr)
+	}
+	if !strings.Contains(stdout, `path "secret/metadata/*"`) || !strings.Contains(stdout, `path "legacy/*"`) {
+		t.Errorf("expected list blocks for both mounts, got:\n%s", stdout)
+	}
+	if strings.Contains(stdout, `path "sys/mounts"`) {
+		t.Errorf("the KV policy must not include the base policy, got:\n%s", stdout)
+	}
+}
+
+func TestPolicyRejectsBadInput(t *testing.T) {
+	cases := [][]string{
+		{"policy", "--kv2-mount", "secret/*"},
+		{"policy", "--kv2-mount", ""},
+		{"policy", "--sudo", "--kv2-mount", "secret"},
+		{"policy", "extra"},
+	}
+	for _, arguments := range cases {
+		exitCode, stdout, stderr := runForTest(arguments...)
+		if exitCode != exitcode.UsageError {
+			t.Errorf("%v: expected exit code %d, got %d", arguments, exitcode.UsageError, exitCode)
+		}
+		if stdout != "" {
+			t.Errorf("%v: must print no policy on bad input, got:\n%s", arguments, stdout)
+		}
+		if stderr == "" {
+			t.Errorf("%v: expected an error message on stderr", arguments)
+		}
+	}
+}
+
 func TestScanWithoutTokenFailsLoudly(t *testing.T) {
 	t.Setenv("VAULT_TOKEN", "")
 	t.Setenv("VAULT_ADDR", "http://127.0.0.1:8200")

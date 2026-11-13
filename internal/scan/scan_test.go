@@ -24,6 +24,9 @@ type fakeVault struct {
 	mutex    sync.Mutex
 	routes   map[string]fakeAnswer
 	requests []string
+
+	// deniedPaths are answered with "deny" by a GRANT_ALL capabilities-self route.
+	deniedPaths map[string]bool
 }
 
 // grantAll is a fake answer body that grants every capability-self path.
@@ -63,7 +66,11 @@ func (f *fakeVault) ServeHTTP(writer http.ResponseWriter, request *http.Request)
 		_ = json.NewDecoder(request.Body).Decode(&requestBody)
 		capabilitiesByPath := map[string][]string{}
 		for _, askedPath := range requestBody.Paths {
-			capabilitiesByPath[askedPath] = []string{"root"}
+			if f.deniedPaths[askedPath] {
+				capabilitiesByPath[askedPath] = []string{"deny"}
+			} else {
+				capabilitiesByPath[askedPath] = []string{"root"}
+			}
 		}
 		encoded, _ := json.Marshal(map[string]any{"data": capabilitiesByPath})
 		writer.WriteHeader(http.StatusOK)
@@ -83,7 +90,7 @@ func (f *fakeVault) ServeHTTP(writer http.ResponseWriter, request *http.Request)
 // newFakeVault returns a fake Community Vault where every check succeeds.
 // Tests change routes to create the case they need.
 func newFakeVault() *fakeVault {
-	fake := &fakeVault{routes: make(map[string]fakeAnswer)}
+	fake := &fakeVault{routes: make(map[string]fakeAnswer), deniedPaths: make(map[string]bool)}
 
 	fake.set("GET", "", "sys/health", 200, `{"initialized":true,"sealed":false,"version":"2.2.2","enterprise":false}`)
 	fake.set("PUT", "", "sys/capabilities-self", 200, grantAll)
@@ -106,6 +113,12 @@ func newFakeVault() *fakeVault {
 // runFakeScan scans the fake Vault and returns the result.
 func runFakeScan(t *testing.T, fake *fakeVault, options Options) (*Inventory, error) {
 	t.Helper()
+	return runFakeScanWithLogs(t, fake, options, io.Discard)
+}
+
+// runFakeScanWithLogs is runFakeScan, with logs written to logOutput at debug level.
+func runFakeScanWithLogs(t *testing.T, fake *fakeVault, options Options, logOutput io.Writer) (*Inventory, error) {
+	t.Helper()
 
 	server := httptest.NewServer(fake)
 	t.Cleanup(server.Close)
@@ -119,7 +132,7 @@ func runFakeScan(t *testing.T, fake *fakeVault, options Options) (*Inventory, er
 	}
 	apiClient.SetToken("test-token")
 
-	logger, _ := logging.New(logging.Options{Output: io.Discard, Format: logging.FormatText, Level: logging.LevelInfo})
+	logger, _ := logging.New(logging.Options{Output: logOutput, Format: logging.FormatText, Level: logging.LevelDebug})
 	client := vaultclient.NewFromAPIClient(apiClient, logger)
 
 	return New(client, logger, options).Run(context.Background())
