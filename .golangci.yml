@@ -1,0 +1,28 @@
+# golangci-lint configuration (v2 format).
+# Docs: https://golangci-lint.run/docs/configuration/file/
+#
+# "standard" turns on golangci-lint's default set: errcheck, govet,
+# ineffassign, staticcheck and unused. The extra linters below catch
+# security issues, swallowed or badly compared errors, and typos.
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - bodyclose   # HTTP response bodies must be closed
+    - errorlint   # errors must be compared with errors.Is / errors.As
+    - gosec       # common security mistakes
+    - misspell    # spelling mistakes in comments and strings
+    - nilerr      # returning nil when an error was found
+  settings:
+    errcheck:
+      # Writing help text to stdout cannot usefully fail, so fmt.Fprint*
+      # results are not checked. Every other ignored error is a lint failure.
+      exclude-functions:
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - fmt.Fprint
+
+formatters:
+  enable:
+    - gofmt

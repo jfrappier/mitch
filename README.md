@@ -24,6 +24,14 @@ People often ask how to run reports in Vault, but Vault is not a CMDB or an inve
 - **Encrypted at rest.** Scan results are stored in a local SQLite database, with sensitive fields encrypted using a key derived from your passphrase.
 - **Least privilege.** Mitch publishes the exact Vault policies it needs. Endpoints that require `sudo` are skipped unless you opt in with `--sudo`.
 
+## Documentation
+
+- [Design decisions](docs/design-decisions.md) and what each means for you
+- [How Mitch protects your data](docs/data-security.md)
+- [Logging](docs/logging.md)
+- [Exit codes](docs/exit-codes.md)
+- [Developing Mitch](docs/development.md)
+
 ## Supported Vault versions
 
 Vault 1.19 and later, including 2.x.
