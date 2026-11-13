@@ -91,7 +91,7 @@ func (v integrationVault) runScanAs(t *testing.T, token string, extraArguments .
 	t.Setenv("VAULT_NAMESPACE", "")
 
 	outputPath := filepath.Join(t.TempDir(), "inventory.json")
-	arguments := append([]string{"scan", "--output", outputPath}, extraArguments...)
+	arguments := append([]string{"scan", "--no-save", "--output", outputPath}, extraArguments...)
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -439,5 +439,51 @@ func TestScanKVPartialPolicyIsIncompleteAndRedacted(t *testing.T) {
 	encoded, _ := json.Marshal(inventory)
 	if strings.Contains(logs, hiddenFolder) || strings.Contains(string(encoded), hiddenFolder) {
 		t.Errorf("folder name %q leaked into the logs or the inventory\nlogs:\n%s", hiddenFolder, logs)
+	}
+}
+
+func TestScanSavesEncryptedAndExportsBack(t *testing.T) {
+	vault := setUpVault(t)
+	token := vault.createToken(t, checks.BasePolicyName)
+	databasePath := testDatabase(t)
+
+	exitCode, _, stderr := runForTest("init")
+	if exitCode != exitcode.Success {
+		t.Fatalf("init failed: exit %d\nstderr: %s", exitCode, stderr)
+	}
+
+	t.Setenv("VAULT_ADDR", vault.address)
+	t.Setenv("VAULT_TOKEN", token)
+	t.Setenv("VAULT_NAMESPACE", "")
+
+	exitCode, stdout, stderr := runForTest("scan", "--kv=false")
+	if exitCode != exitcode.Success {
+		t.Fatalf("scan failed: exit %d\nstderr: %s", exitCode, stderr)
+	}
+	scanID := strings.TrimSpace(stdout)
+	if len(scanID) != 16 || strings.Contains(stdout, "{") {
+		t.Fatalf("a saved scan must print only its id, got %q", stdout)
+	}
+
+	// The Vault address is in the inventory, so it must not appear in the file in the clear.
+	raw, err := os.ReadFile(databasePath)
+	if err != nil {
+		t.Fatalf("reading the database file failed: %v", err)
+	}
+	if bytes.Contains(raw, []byte(vault.address)) || bytes.Contains(raw, []byte(checks.BasePolicyName)) {
+		t.Error("scan data appears in the database file in the clear")
+	}
+
+	exitCode, stdout, stderr = runForTest("export", "--scan", scanID)
+	if exitCode != exitcode.Success {
+		t.Fatalf("export failed: exit %d\nstderr: %s", exitCode, stderr)
+	}
+	var inventory scan.Inventory
+	err = json.Unmarshal([]byte(stdout), &inventory)
+	if err != nil {
+		t.Fatalf("the export is not valid JSON: %v", err)
+	}
+	if inventory.VaultAddress != vault.address || !hasMount(inventory.Namespaces[0].SecretsEngines, "secret/") {
+		t.Errorf("the export does not match the scan: address %q, mounts %+v", inventory.VaultAddress, inventory.Namespaces[0].SecretsEngines)
 	}
 }

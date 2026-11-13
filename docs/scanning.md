@@ -1,8 +1,10 @@
 # Scanning Vault
 
-`mitch scan` reads a Vault cluster and prints a JSON inventory of what it found. It never writes to Vault and never reads secret values.
+`mitch scan` reads a Vault cluster and saves an encrypted inventory of what it found. It never writes to Vault and never reads secret values.
 
-> **Not built yet:** storing scans and comparing scans. Today the inventory is printed as JSON.
+Before your first saved scan, create the database with `mitch init`. See [saving-scans.md](saving-scans.md). To print the inventory as JSON without saving it, use `--no-save`.
+
+> **Not built yet:** comparing scans.
 
 ## 1. Create the Mitch policy and token
 
@@ -51,15 +53,20 @@ Mitch uses the same environment variables as the `vault` CLI: `VAULT_ADDR`, `VAU
 ```shell
 export VAULT_ADDR=https://vault.example.com:8200
 export VAULT_TOKEN=<token from step 1>
+export MITCH_PASSPHRASE='<your passphrase>'
 
-mitch scan --output inventory.json
+mitch scan
 ```
+
+The scan is saved and its id is printed. Use `mitch history` and `mitch export` to see it ([saving-scans.md](saving-scans.md)).
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
 | `--sudo` | off | Also run checks that need `sudo`. |
 | `--kv` | on | Count secrets in KV mounts. `--kv=false` turns it off. |
-| `--output FILE` | standard output | Write the JSON to a file. The file is created readable only by you (`0600`). |
+| `--no-save` | off | Do not save the scan. Print the JSON to standard output instead. Needs no database. |
+| `--output FILE` | none | Also write the JSON to a file, in plain text. The file is created readable only by you (`0600`). |
+| `--db PATH`, `--passphrase-file FILE` | see [saving-scans.md](saving-scans.md) | Where to save, and how to unlock. |
 | `--timeout DURATION` | `10m` | Stop the scan if it takes longer than this, for example `30s` or `1h`. |
 
 `VAULT_NAMESPACE` is ignored on purpose. Mitch always starts at the root namespace and, on Vault Enterprise, scans every child namespace it can see.
@@ -80,7 +87,7 @@ Large KV mounts take one request per folder. If a scan hits `--timeout`, raise i
 | --- | --- |
 | Every check ran | 0 |
 | Some checks were skipped (missing grant, HTTP 403 or 404), or a KV mount was only partly counted | 5 |
-| The scan could not run (no token, Vault unreachable, sealed, HTTP 5xx) | 1 |
+| The scan could not run or could not be saved (no database, wrong passphrase, no token, Vault unreachable, sealed, HTTP 5xx) | 1 |
 
 Every skipped check is listed in the JSON under `skipped` and logged as a `check skipped` warning with the HTTP status and the next step. A KV mount gets one `skipped` entry no matter how many of its folders failed. Checks left out on purpose, such as sudo checks without `--sudo`, KV counts with `--kv=false`, or Enterprise checks on Vault Community, are listed under `not_requested` and do not change the exit code. See [exit-codes.md](exit-codes.md).
 
@@ -110,7 +117,7 @@ Each `kv_counts` entry looks like this:
 - `kv_counts` is `null` when counting was off or the namespace's secrets engines could not be read, and `[]` when the namespace has no KV mounts.
 - Key and folder names are never recorded.
 
-The inventory is plain text. Treat it as sensitive: it describes your Vault's layout and contains every ACL policy. See [data-security.md](data-security.md).
+Saved scans are encrypted. JSON printed with `--no-save`, `--output` or `mitch export` is plain text. Treat it as sensitive: it describes your Vault's layout and contains every ACL policy. See [data-security.md](data-security.md).
 
 ## Tested versions
 

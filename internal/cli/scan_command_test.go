@@ -71,7 +71,7 @@ func TestScanWithoutTokenFailsLoudly(t *testing.T) {
 	t.Setenv("VAULT_ADDR", "http://127.0.0.1:8200")
 	t.Setenv("HOME", t.TempDir()) // so a ~/.vault-token file on the test machine is not used
 
-	exitCode, _, stderr := runForTest("scan")
+	exitCode, _, stderr := runForTest("scan", "--no-save")
 
 	if exitCode != exitcode.GeneralError {
 		t.Errorf("expected exit code %d, got %d", exitcode.GeneralError, exitCode)
@@ -86,7 +86,7 @@ func TestScanUnreachableVaultFailsLoudly(t *testing.T) {
 	t.Setenv("VAULT_ADDR", "http://127.0.0.1:1") // nothing listens on port 1
 	t.Setenv("VAULT_MAX_RETRIES", "0")
 
-	exitCode, _, stderr := runForTest("scan")
+	exitCode, _, stderr := runForTest("scan", "--no-save")
 
 	if exitCode != exitcode.GeneralError {
 		t.Errorf("expected exit code %d, got %d", exitcode.GeneralError, exitCode)

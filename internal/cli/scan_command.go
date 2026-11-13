@@ -12,6 +12,7 @@ import (
 	"github.com/jfrappier/mitch/internal/exitcode"
 	"github.com/jfrappier/mitch/internal/logging"
 	"github.com/jfrappier/mitch/internal/scan"
+	"github.com/jfrappier/mitch/internal/store"
 	"github.com/jfrappier/mitch/internal/vaultclient"
 	"github.com/jfrappier/mitch/internal/version"
 )
@@ -20,12 +21,17 @@ import (
 // because the inventory describes the Vault cluster.
 const outputFileMode = 0o600
 
-// runScan scans Vault and prints the inventory as JSON.
+// runScan scans Vault and saves the inventory, encrypted, in the Mitch database.
 //
-//	mitch scan [--sudo] [--kv=false] [--output FILE] [--timeout DURATION]
+//	mitch scan [--sudo] [--kv=false] [--no-save] [--output FILE] [--timeout DURATION]
+//	           [--db PATH] [--passphrase-file FILE]
 //
 // Vault connection settings come from VAULT_ADDR, VAULT_TOKEN and the other
 // standard Vault environment variables.
+//
+// By default the scan is saved and only its id is printed. --no-save prints
+// the inventory as JSON instead, and needs no database. --output also writes
+// the JSON to a file, in plain text.
 //
 // Exit codes: 0 when every check ran, 5 when some checks were skipped,
 // 1 when the scan could not run at all.
@@ -35,7 +41,9 @@ func runScan(runContext runContext, arguments []string) int {
 
 	sudo := flags.Bool("sudo", false, "also run checks that need the sudo capability (attach the mitch-scanner-sudo policy)")
 	countKV := flags.Bool("kv", true, "count secrets in KV mounts by listing key names (never values); --kv=false turns it off")
-	outputPath := flags.String("output", "", "write the JSON inventory to this file instead of standard output")
+	noSave := flags.Bool("no-save", false, "do not save the scan; print the inventory as JSON instead")
+	outputPath := flags.String("output", "", "also write the JSON inventory to this file, in plain text")
+	databaseFlags := addStoreFlags(flags)
 	timeout := flags.Duration("timeout", 10*time.Minute, "stop the scan if it takes longer than this")
 
 	err := flags.Parse(arguments)
@@ -51,8 +59,25 @@ func runScan(runContext runContext, arguments []string) int {
 	}
 
 	scanLogger := logging.ForComponent(runContext.logger, "scan")
+	saveScan := !*noSave
 
-	// Step 1: connect to Vault using the standard environment variables.
+	// Step 1: unlock the database before scanning, so a missing database or
+	// wrong passphrase fails in a second instead of after a long scan.
+	var database *store.Store
+	if saveScan {
+		database, err = openStore(context.Background(), runContext, databaseFlags)
+		if err != nil {
+			scanLogger.Error("cannot open the database to save the scan",
+				logging.FieldOperation, "open_store",
+				logging.FieldError, err.Error(),
+				"next_step", `run "mitch init" first, or pass --no-save to print the scan without saving it`,
+			)
+			return exitcode.GeneralError
+		}
+		defer closeStore(runContext, database)
+	}
+
+	// Step 2: connect to Vault using the standard environment variables.
 	client, err := vaultclient.New(runContext.logger)
 	if err != nil {
 		scanLogger.Error("cannot connect to Vault",
@@ -62,7 +87,7 @@ func runScan(runContext runContext, arguments []string) int {
 		return exitcode.GeneralError
 	}
 
-	// Step 2: run the scan.
+	// Step 3: run the scan.
 	scanContext, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
 
@@ -76,7 +101,7 @@ func runScan(runContext runContext, arguments []string) int {
 		return exitcode.GeneralError
 	}
 
-	// Step 3: write the inventory.
+	// Step 4: save and write the inventory.
 	inventoryJSON, err := json.MarshalIndent(inventory, "", "  ")
 	if err != nil {
 		scanLogger.Error("could not encode the inventory as JSON",
@@ -87,7 +112,26 @@ func runScan(runContext runContext, arguments []string) int {
 	}
 	inventoryJSON = append(inventoryJSON, '\n')
 
-	err = writeOutput(runContext, *outputPath, inventoryJSON)
+	if saveScan {
+		scanID, err := database.SaveScan(scanContext, inventory.StartedAt, inventory.FinishedAt, inventoryJSON)
+		if err != nil {
+			scanLogger.Error("could not save the scan",
+				logging.FieldOperation, "save_scan",
+				"db", database.Path(),
+				logging.FieldError, err.Error(),
+			)
+			return exitcode.GeneralError
+		}
+		scanLogger.Info("scan saved", logging.FieldOperation, "save_scan", "scan_id", scanID, "db", database.Path())
+		fmt.Fprintln(runContext.stdout, scanID)
+	}
+
+	// Without --output, the JSON goes to standard output only when the scan
+	// is not saved; a saved scan prints just its id.
+	writeJSON := *outputPath != "" || !saveScan
+	if writeJSON {
+		err = writeOutput(runContext, *outputPath, inventoryJSON)
+	}
 	if err != nil {
 		scanLogger.Error("could not write the inventory",
 			logging.FieldOperation, "write_output",
@@ -97,7 +141,7 @@ func runScan(runContext runContext, arguments []string) int {
 		return exitcode.GeneralError
 	}
 
-	// Step 4: report skipped checks loudly and pick the exit code.
+	// Step 5: report skipped checks loudly and pick the exit code.
 	for _, skipped := range inventory.Skipped {
 		scanLogger.Warn("check skipped",
 			logging.FieldOperation, "summary",
