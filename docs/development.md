@@ -38,7 +38,7 @@ CI runs all of these on every pull request. See [`.github/workflows/ci.yml`](../
 
 Each is added in the pull request that first needs it. In use today: `github.com/hashicorp/vault/api`.
 
-`vault/api` brings in these indirect dependencies, all pure Go: `cenkalti/backoff`, `go-jose/go-jose`, HashiCorp's `errwrap`, `go-cleanhttp`, `go-multierror`, `go-retryablehttp`, `go-rootcerts`, `go-secure-stdlib`, `go-sockaddr` and `hcl` v1, `mitchellh/go-homedir`, `mitchellh/mapstructure`, `ryanuber/go-glob`, and `golang.org/x/{crypto,net,text,time}`. The exact versions are in [`go.mod`](../go.mod).
+`vault/api` brings in these indirect dependencies, all pure Go: `cenkalti/backoff`, `go-jose/go-jose`, HashiCorp's `errwrap`, `go-cleanhttp`, `go-multierror`, `go-retryablehttp`, `go-rootcerts`, `go-secure-stdlib`, `go-sockaddr` and `hcl` v1, `mitchellh/go-homedir`, `mitchellh/mapstructure`, `ryanuber/go-glob`, and `golang.org/x/{net,text,time}`. The exact versions are in [`go.mod`](../go.mod).
 
 ## Integration tests
 
