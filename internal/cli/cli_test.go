@@ -70,23 +70,6 @@ func TestUnknownCommandFailsLoudly(t *testing.T) {
 	}
 }
 
-func TestStubCommandsReturnNotImplemented(t *testing.T) {
-	stubs := []string{"serve"}
-
-	for _, name := range stubs {
-		t.Run(name, func(t *testing.T) {
-			exitCode, _, stderr := runForTest(name)
-
-			if exitCode != exitcode.NotImplemented {
-				t.Errorf("expected exit code %d, got %d", exitcode.NotImplemented, exitCode)
-			}
-			if !strings.Contains(stderr, "not implemented") {
-				t.Errorf("expected a not-implemented error, got %q", stderr)
-			}
-		})
-	}
-}
-
 func TestJSONLogFormatIsUsed(t *testing.T) {
 	_, _, stderr := runForTest("--log-format", "json", "explode")
 

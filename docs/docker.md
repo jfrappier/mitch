@@ -67,6 +67,10 @@ docker run --rm -e MITCH_PASSPHRASE -v mitch-data:/data -v "$PWD/out:/out" mitch
 
 On Linux, the container writes as uid 65532, so that folder must be writable by that user. Docker Desktop on macOS handles this for you.
 
+## Browse in the web UI
+
+See [web-ui.md](web-ui.md#running-in-docker) for `mitch serve` in a container.
+
 ## Build arguments
 
 | Argument | Default | Meaning |

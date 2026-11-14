@@ -46,6 +46,10 @@ If the old passphrase may have leaked together with a copy of the database, chan
 
 **A lost passphrase cannot be recovered.** No one, including the Mitch maintainers, can decrypt the scans without it.
 
+## The web UI
+
+`mitch serve` keeps the database unlocked while it runs, and shows decrypted scans to any browser that has its access token. The token is random (256 bits), new each run, printed only to the terminal, and compared in constant time. Pages are sent with `Cache-Control: no-store` and a Content Security Policy that allows no scripts. The UI uses plain HTTP, so it listens on `127.0.0.1` by default and Mitch warns when it listens anywhere else. See [web-ui.md](web-ui.md).
+
 ## Plain-text output
 
 Some commands print scan data in plain text, because other tools need to read it. Mitch logs a warning each time:
