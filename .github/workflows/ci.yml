@@ -7,6 +7,7 @@
 #   integration - tests against real Vault dev servers (oldest and newest supported),
 #                 including "terraform plan" on what "mitch terraform" writes
 #   build - a static binary for every platform Mitch ships for
+#   docker - build the container image and check it runs as nonroot with a volume
 #
 # Any failing step fails the whole run.
 name: ci
@@ -166,3 +167,32 @@ jobs:
         run: |
           go build -trimpath -o "dist/mitch-${GOOS}-${GOARCH}" ./cmd/mitch
           ls -l dist/
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the image
+        run: docker build --build-arg VERSION=ci --build-arg COMMIT="${GITHUB_SHA}" --tag mitch:ci .
+      # Checks the image runs as nonroot, and that a new named volume on /data
+      # is writable by it, which is what docs/docker.md tells users to do.
+      - name: Smoke test the image
+        env:
+          MITCH_PASSPHRASE: ci passphrase that is long enough
+        run: |
+          set -euo pipefail
+          version_output="$(docker run --rm mitch:ci version)"
+          echo "$version_output"
+          if [[ "$version_output" != "mitch ci (commit ${GITHUB_SHA}"* ]]; then
+            echo "mitch version did not show the build arguments"
+            exit 1
+          fi
+          docker volume create mitch-ci-data
+          docker run --rm -e MITCH_PASSPHRASE -v mitch-ci-data:/data mitch:ci init
+          docker run --rm -e MITCH_PASSPHRASE -v mitch-ci-data:/data mitch:ci history
+          user="$(docker image inspect --format '{{.Config.User}}' mitch:ci)"
+          echo "image user: $user"
+          if [ "$user" != "nonroot:nonroot" ]; then
+            echo "the image must run as nonroot:nonroot"
+            exit 1
+          fi

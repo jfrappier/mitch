@@ -31,6 +31,7 @@ People often ask how to run reports in Vault, but Vault is not a CMDB or an inve
 - [Reports](docs/reports.md): a summary of one scan, in Markdown or JSON
 - [Comparing scans](docs/comparing-scans.md): what changed between two scans
 - [Generating Terraform](docs/terraform.md): import your Vault config into Terraform
+- [Running in Docker](docs/docker.md): build the image and keep the database on a volume
 - [Design decisions](docs/design-decisions.md) and what each means for you
 - [How Mitch protects your data](docs/data-security.md)
 - [Logging](docs/logging.md)

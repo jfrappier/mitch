@@ -1,0 +1,7 @@
+# Keep the build context small, and never send local data to the Docker
+# daemon: a scan database or generated files could end up in an image layer.
+*
+!go.mod
+!go.sum
+!cmd/
+!internal/
