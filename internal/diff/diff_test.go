@@ -83,9 +83,9 @@ func TestIdenticalScansHaveNoChanges(t *testing.T) {
 	}
 
 	var text bytes.Buffer
-	err = WriteText(&text, result)
+	err = WriteMarkdown(&text, result)
 	if err != nil {
-		t.Fatalf("WriteText failed: %v", err)
+		t.Fatalf("WriteMarkdown failed: %v", err)
 	}
 	if !strings.Contains(text.String(), "No changes.") {
 		t.Errorf("expected \"No changes.\" in:\n%s", text.String())
@@ -275,7 +275,7 @@ func TestPluginRuntimesComparedByTypeAndName(t *testing.T) {
 	}
 }
 
-func TestWriteTextShowsEveryKindOfChange(t *testing.T) {
+func TestWriteMarkdownShowsEveryKindOfChange(t *testing.T) {
 	from := baseInventory()
 	to := cloneInventory(t, from)
 	to.Skipped = []scan.SkippedCheck{{Check: "audit_devices"}}
@@ -289,22 +289,22 @@ func TestWriteTextShowsEveryKindOfChange(t *testing.T) {
 		t.Fatalf("Compare failed: %v", err)
 	}
 	var text bytes.Buffer
-	err = WriteText(&text, result)
+	err = WriteMarkdown(&text, result)
 	if err != nil {
-		t.Fatalf("WriteText failed: %v", err)
+		t.Fatalf("WriteMarkdown failed: %v", err)
 	}
 	output := text.String()
 	for _, expected := range []string{
-		"Comparing scan aaaa (2026-11-13 09:00:00 UTC, Vault 2.2.2)",
-		"! scan bbbb skipped 1 check(s)",
-		"Secrets engines in namespace (root)",
-		"  - old/ (kv)",
-		"  ~ secret/",
-		`      description: "app secrets" -> "changed"`,
-		"Auth methods in namespace (root)",
-		"  + userpass/ (userpass)",
-		"ACL policies in namespace (root)",
-		`      + path "x" {}`,
+		"- From scan: aaaa (2026-11-13 09:00:00 UTC, Vault 2.2.2)",
+		"## Warnings\n\n- scan bbbb skipped 1 check(s)",
+		"## Secrets engines in namespace (root)\n\n```diff\n",
+		"\n- old/ (kv)\n",
+		"\n~ secret/\n",
+		`    description: "app secrets" -> "changed"`,
+		"## Auth methods in namespace (root)",
+		"\n+ userpass/ (userpass)\n",
+		"## ACL policies in namespace (root)",
+		`  + path "x" {}`,
 	} {
 		if !strings.Contains(output, expected) {
 			t.Errorf("text output is missing %q:\n%s", expected, output)

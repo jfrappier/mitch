@@ -28,6 +28,7 @@ import (
 	"github.com/jfrappier/mitch/internal/checks"
 	"github.com/jfrappier/mitch/internal/diff"
 	"github.com/jfrappier/mitch/internal/exitcode"
+	"github.com/jfrappier/mitch/internal/report"
 	"github.com/jfrappier/mitch/internal/scan"
 )
 
@@ -564,4 +565,54 @@ func sectionAdded(result diff.Result, sectionName string, label string) bool {
 		}
 	}
 	return false
+}
+
+func TestReportOnARealScan(t *testing.T) {
+	vault := setUpVault(t)
+	vault.setUpKVMounts(t)
+	err := vault.root.Sys().PutPolicy(checks.KVPolicyName, checks.RenderKVPolicy(vault.allKVMounts(t)))
+	if err != nil {
+		t.Fatalf("writing the %s policy failed: %v", checks.KVPolicyName, err)
+	}
+	token := vault.createToken(t, checks.BasePolicyName, checks.KVPolicyName)
+	testDatabase(t)
+
+	exitCode, _, stderr := runForTest("init")
+	if exitCode != exitcode.Success {
+		t.Fatalf("init failed: exit %d\nstderr: %s", exitCode, stderr)
+	}
+
+	t.Setenv("VAULT_ADDR", vault.address)
+	t.Setenv("VAULT_TOKEN", token)
+	t.Setenv("VAULT_NAMESPACE", "")
+
+	exitCode, scanOutput, stderr := runForTest("scan")
+	if exitCode != exitcode.Success {
+		t.Fatalf("scan failed: exit %d\nstderr: %s", exitCode, stderr)
+	}
+	scanID := strings.TrimSpace(scanOutput)
+
+	outputPath := filepath.Join(t.TempDir(), "report.json")
+	exitCode, stdout, stderr := runForTest("report", "--output", outputPath)
+	if exitCode != exitcode.Success {
+		t.Fatalf("report failed: exit %d\nstderr: %s", exitCode, stderr)
+	}
+	for _, expected := range []string{"# Mitch report", "- Scan: " + scanID, "## KV secrets", "| (root) | secret/ | kv |"} {
+		if !strings.Contains(stdout, expected) {
+			t.Errorf("the Markdown report is missing %q:\n%s", expected, stdout)
+		}
+	}
+
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("reading the report file failed: %v", err)
+	}
+	var built report.Report
+	err = json.Unmarshal(content, &built)
+	if err != nil {
+		t.Fatalf("the report file is not JSON: %v", err)
+	}
+	if built.Scan.VaultAddress != vault.address || !built.Summary.KVCounted || built.Summary.KVSecrets == 0 || built.Summary.BuiltinPlugins == 0 {
+		t.Errorf("the report does not match the scan: %+v", built.Summary)
+	}
 }

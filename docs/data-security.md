@@ -43,6 +43,6 @@ Some commands print scan data in plain text, because other tools need to read it
 
 - `mitch scan --no-save` and `mitch scan --output FILE`
 - `mitch export`
-- `mitch diff`
+- `mitch report` and `mitch diff`
 
 Files are created readable only by you (`0600`). Treat the output as sensitive: it describes your Vault's layout and contains every ACL policy.

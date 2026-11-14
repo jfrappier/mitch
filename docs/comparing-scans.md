@@ -18,23 +18,28 @@ mitch scan
 mitch diff
 ```
 
-```text
-Comparing scan ed1161e60195efe2 (2026-11-13 20:48:33 UTC, Vault 2.2.2)
-     with scan 758cc50a9f5c6e83 (2026-11-13 21:15:02 UTC, Vault 2.2.2)
+````text
+# Mitch diff
 
-Secrets engines in namespace (root)
-  + e2e-demo/ (kv)
-  ~ secret/
-      config.max_lease_ttl: 0 -> 7200
+- From scan: ed1161e60195efe2 (2026-11-13 20:48:33 UTC, Vault 2.2.2)
+- To scan: 758cc50a9f5c6e83 (2026-11-13 21:15:02 UTC, Vault 2.2.2)
 
-ACL policies in namespace (root)
-  + e2e-demo
+## Secrets engines in namespace (root)
 
-KV counts in namespace (root)
-  + e2e-demo/ (0 secrets, 0 folders)
+```diff
++ e2e-demo/ (kv)
+~ secret/
+    config.max_lease_ttl: 0 -> 7200
 ```
 
-Each line starts with:
+## ACL policies in namespace (root)
+
+```diff
++ e2e-demo
+```
+````
+
+The output is Markdown. It reads as plain text in a terminal, and on GitHub the change blocks are colored. Each line in a block starts with:
 
 | Mark | Meaning |
 | --- | --- |
@@ -54,14 +59,24 @@ mitch diff --from ed1161e60195efe2 --to 758cc50a9f5c6e83
 
 Give both `--from` (the older scan) and `--to` (the newer scan), or neither.
 
+## 4. Save the diff
+
+`--output` saves the diff to a file, and the terminal still shows it. The file name picks the format, so one run gives you both:
+
+```shell
+mitch diff --output changes.json
+```
+
+How output works is the same for `mitch report`. See [Output and files](reports.md#output-and-files).
+
 ## Flags
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
 | `--from ID` | second newest scan | The older scan. |
 | `--to ID` | newest scan | The newer scan. |
-| `--format text\|json` | `text` | `json` writes the same result for scripts. Lists are always `[]`, never `null`. |
-| `--output FILE` | standard output | Write the diff to a file, readable only by you (`0600`). |
+| `--format markdown\|json` | `markdown` | What the terminal shows. Use `json` to pipe into tools such as `jq`. |
+| `--output FILE` | none | Also save to `FILE`: `.json` saves JSON, `.md` saves Markdown. |
 | `--db PATH`, `--passphrase-file FILE` | | See [saving-scans.md](saving-scans.md). |
 
 `mitch diff` exits with `0` whether or not anything changed. See [exit-codes.md](exit-codes.md) for failures.
@@ -91,4 +106,4 @@ A mount that was disabled and enabled again at the same path shows as changed, w
 
 ## The output is plain text
 
-The diff contains policy text and mount settings from the encrypted scans, so Mitch logs a warning each time it prints one. Treat it as sensitive. See [data-security.md](data-security.md).
+The diff contains policy text and mount settings from the encrypted scans. See [data-security.md](data-security.md#plain-text-output).
