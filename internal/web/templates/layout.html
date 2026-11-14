@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} · Mitch</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <a class="brand" href="/">Mitch</a>
+  <span class="note">Read-only view of saved scans. Nothing here contacts Vault.</span>
+</header>
+<main>
+<h1>{{.Title}}</h1>
+{{template "content" .}}
+</main>
+</body>
+</html>

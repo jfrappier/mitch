@@ -47,6 +47,9 @@ Each decision below says what was chosen, why, and what it means for you as a us
 **Decision:** One binary provides the CLI and a local read-only web UI (`mitch serve`). Mitch has no built-in scheduler.
 **Impact:** Run it once, in CI, or on a schedule with cron or the tool you already use.
 
+**Decision:** `mitch serve` unlocks the database in the terminal, the same way as every other command, and prints a link with a random access token that is new each run. Pages need the token.
+**Impact:** The passphrase never goes through the browser. Other users and web pages on the same machine can reach `127.0.0.1` but cannot read your scans. Reopen the printed link after each restart. See [web-ui.md](web-ui.md).
+
 ## No AI in v1
 
 **Decision:** Every count, finding and Terraform file comes from deterministic code. A later version may let you connect your own AI provider for explanations, off by default.

@@ -1,0 +1,67 @@
+/* Mitch web UI. No scripts, no web fonts: everything is in this file. */
+:root {
+  --background: #ffffff;
+  --text: #1f2328;
+  --muted: #59636e;
+  --border: #d1d9e0;
+  --surface: #f6f8fa;
+  --link: #0969da;
+  --added: #1a7f37;
+  --removed: #cf222e;
+  --changed: #9a6700;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0d1117;
+    --text: #e6edf3;
+    --muted: #9198a1;
+    --border: #3d444d;
+    --surface: #151b23;
+    --link: #4493f8;
+    --added: #3fb950;
+    --removed: #f85149;
+    --changed: #d29922;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--text);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  align-items: baseline;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.brand { font-weight: 700; font-size: 18px; color: var(--text); text-decoration: none; }
+.note { color: var(--muted); font-size: 13px; }
+main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+h1 { font-size: 24px; margin: 8px 0 16px; overflow-wrap: anywhere; }
+h2 { font-size: 18px; margin: 28px 0 8px; }
+a { color: var(--link); }
+code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
+.facts { padding-left: 20px; }
+.error { color: var(--removed); font-weight: 600; }
+.warnings li { color: var(--changed); }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+thead th { background: var(--surface); }
+tbody th { width: 30%; font-weight: 600; }
+pre.diff {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  overflow-x: auto;
+}
+.added { color: var(--added); }
+.removed { color: var(--removed); }
+.changed { color: var(--changed); }

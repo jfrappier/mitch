@@ -48,9 +48,9 @@ func WriteMarkdown(output io.Writer, result Result) error {
 // changed item inside a "diff" code block.
 func writeSection(text *strings.Builder, section Section) {
 	if section.Namespace == "" {
-		fmt.Fprintf(text, "## %s\n\n", sectionTitle(section.Name))
+		fmt.Fprintf(text, "## %s\n\n", SectionTitle(section.Name))
 	} else {
-		fmt.Fprintf(text, "## %s in namespace %s\n\n", sectionTitle(section.Name), section.Namespace)
+		fmt.Fprintf(text, "## %s in namespace %s\n\n", SectionTitle(section.Name), section.Namespace)
 	}
 
 	// A fenced block keeps the layout exactly as written, and the "diff"
@@ -88,9 +88,9 @@ var sectionTitles = map[string]string{
 	SectionKVCounts:       "KV counts",
 }
 
-// sectionTitle returns the heading for a section, or the raw name if there
+// SectionTitle returns the heading for a section, or the raw name if there
 // is no heading for it.
-func sectionTitle(name string) string {
+func SectionTitle(name string) string {
 	title, known := sectionTitles[name]
 	if !known {
 		return name

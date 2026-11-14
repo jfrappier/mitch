@@ -58,7 +58,7 @@ func commands() []command {
 		{name: "export", summary: "Print a saved scan as JSON (SARIF not built yet)", run: runExport},
 		{name: "terraform", summary: "Write Terraform, with import blocks, for the Vault config in a saved scan", run: runTerraform},
 		{name: "policy", summary: "Print the Vault policy Mitch needs (--sudo or --kv2-mount for add-ons)", run: runPolicy},
-		{name: "serve", summary: "Start the local read-only web UI (not built yet)", run: notImplemented("serve")},
+		{name: "serve", summary: "Start the local read-only web UI over the saved scans", run: runServe},
 		{name: "version", summary: "Print the Mitch version", run: runVersion},
 		{name: "help", summary: "Show this help", run: runHelp},
 	}
@@ -127,21 +127,6 @@ func findCommand(name string) (command, bool) {
 		}
 	}
 	return command{}, false
-}
-
-// notImplemented returns a run function for a command that is planned but
-// not built yet. It fails loudly with its own exit code so nobody mistakes a
-// stub for a successful run.
-func notImplemented(commandName string) func(runContext, []string) int {
-	return func(context runContext, arguments []string) int {
-		commandLogger := logging.ForComponent(context.logger, commandName)
-		commandLogger.Error("command is not implemented yet",
-			logging.FieldOperation, "run_command",
-			"command", commandName,
-			"next_step", "watch the project README for release notes",
-		)
-		return exitcode.NotImplemented
-	}
 }
 
 // runVersion prints the build information.
