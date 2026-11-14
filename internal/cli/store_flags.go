@@ -85,9 +85,13 @@ var newKDFParams = encryption.NewKDFParams
 type storeFlags struct {
 	databasePath   *string
 	passphraseFile *string
+	// allowInsecurePassphraseFile lets a passphrase file that other users
+	// can read through with a warning, for CI and mounted container secrets.
+	allowInsecurePassphraseFile *bool
 }
 
-// addStoreFlags registers --db and --passphrase-file on a command's flags.
+// addStoreFlags registers --db, --passphrase-file and
+// --allow-insecure-passphrase-file on a command's flags.
 func addStoreFlags(flags *flag.FlagSet) storeFlags {
 	defaultPath := os.Getenv(databaseEnvVar)
 	if defaultPath == "" {
@@ -98,7 +102,9 @@ func addStoreFlags(flags *flag.FlagSet) storeFlags {
 		databasePath: flags.String("db", defaultPath,
 			"path to the Mitch database (default from "+databaseEnvVar+", else "+defaultDatabasePath+")"),
 		passphraseFile: flags.String("passphrase-file", "",
-			"read the passphrase from this file instead of "+passphraseEnvVar),
+			"read the passphrase from this file instead of "+passphraseEnvVar+"; it must be readable only by you (chmod 600)"),
+		allowInsecurePassphraseFile: flags.Bool("allow-insecure-passphrase-file", false,
+			"use a passphrase file that other users can read, with a warning; for CI and non-interactive runs where you can't set its permissions"),
 	}
 	return registered
 }
@@ -113,7 +119,7 @@ func addStoreFlags(flags *flag.FlagSet) storeFlags {
 // instead of waiting for input that will never come.
 func readPassphrase(runContext runContext, flags storeFlags, use passphraseUse) ([]byte, error) {
 	if *flags.passphraseFile != "" {
-		return readPassphraseFile(runContext, *flags.passphraseFile)
+		return readPassphraseFile(runContext, *flags.passphraseFile, *flags.allowInsecurePassphraseFile)
 	}
 
 	fromEnvironment := os.Getenv(passphraseEnvVar)
@@ -166,9 +172,11 @@ func promptForPassphrase(runContext runContext, use passphraseUse) ([]byte, erro
 //  1. --new-passphrase-file
 //  2. the MITCH_NEW_PASSPHRASE environment variable
 //  3. a prompt (asked twice), when a person is at a terminal
-func readReplacementPassphrase(runContext runContext, newPassphraseFile string) ([]byte, error) {
+//
+// allowInsecure is --allow-insecure-passphrase-file, which covers this file too.
+func readReplacementPassphrase(runContext runContext, newPassphraseFile string, allowInsecure bool) ([]byte, error) {
 	if newPassphraseFile != "" {
-		return readPassphraseFile(runContext, newPassphraseFile)
+		return readPassphraseFile(runContext, newPassphraseFile, allowInsecure)
 	}
 
 	fromEnvironment := os.Getenv(newPassphraseEnvVar)
@@ -185,7 +193,29 @@ func readReplacementPassphrase(runContext runContext, newPassphraseFile string) 
 
 // readPassphraseFile reads a passphrase from a file. One trailing line break
 // is removed, because most editors and "echo" add one.
-func readPassphraseFile(runContext runContext, path string) ([]byte, error) {
+//
+// A file that other users can read is refused, the way ssh refuses a private
+// key that others can read, because anyone who can read it can decrypt every
+// saved scan. allowInsecure (--allow-insecure-passphrase-file) turns the
+// refusal into a warning, for CI runners and containers where the secret is
+// mounted with permissions the user can't change.
+func readPassphraseFile(runContext runContext, path string, allowInsecure bool) ([]byte, error) {
+	// Check permissions before reading, so an exposed file is reported even
+	// when its content is also wrong.
+	problem, err := store.PermissionProblem(path)
+	if err != nil {
+		return nil, err
+	}
+	if problem != "" {
+		if !allowInsecure {
+			return nil, fmt.Errorf("refusing to use the passphrase file: %s. For CI or a mounted secret whose permissions you can't change, pass --allow-insecure-passphrase-file", problem)
+		}
+		logging.ForComponent(runContext.logger, "store").Warn("using a passphrase file that other users can read, because --allow-insecure-passphrase-file is set",
+			logging.FieldOperation, "read_passphrase",
+			"next_step", problem,
+		)
+	}
+
 	content, err := os.ReadFile(path) //nolint:gosec // path is the user's --passphrase-file flag
 	if err != nil {
 		return nil, fmt.Errorf("reading the passphrase file %s failed: %w", path, err)
@@ -197,18 +227,6 @@ func readPassphraseFile(runContext runContext, path string) ([]byte, error) {
 	if text == "" {
 		return nil, fmt.Errorf("the passphrase file %s is empty", path)
 	}
-
-	problem, err := store.PermissionProblem(path)
-	if err != nil {
-		return nil, err
-	}
-	if problem != "" {
-		logging.ForComponent(runContext.logger, "store").Warn("the passphrase file is readable by other users",
-			logging.FieldOperation, "read_passphrase",
-			"next_step", problem,
-		)
-	}
-
 	return []byte(text), nil
 }
 
