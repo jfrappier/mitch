@@ -1,3 +1,5 @@
+[Mitch docs](README.md) › Scanning Vault
+
 # Scanning Vault
 
 `mitch scan` reads a Vault cluster and saves an encrypted inventory of what it found. It never writes to Vault and never reads secret values.
@@ -74,6 +76,16 @@ The scan is saved and its id is printed. Use `mitch history` and `mitch export` 
 
 ## What the scan does
 
+```mermaid
+flowchart TD
+    health["1. Health<br>sys/health"] --> preflight["2. Preflight<br>sys/capabilities-self"]
+    preflight --> cluster["3. Cluster-wide checks<br>root namespace only"]
+    cluster --> ns["4. Per-namespace checks<br>every namespace on Enterprise"]
+    ns --> kv["5. KV secret counts<br>unless --kv=false"]
+    kv --> save[("Encrypted scan<br>in mitch.db")]
+    health -. "sealed or uninitialized" .-> stop["Scan stops, exit 1"]
+```
+
 1. **Health:** reads `sys/health` to get the Vault version and edition. A sealed or uninitialized Vault stops the scan.
 2. **Preflight:** asks `sys/capabilities-self` which grants the token has. Each missing grant is logged as a warning, and that check is skipped instead of failing later. If the token cannot call `sys/capabilities-self`, Mitch tries every check and records each failure.
 3. **Cluster-wide checks** (root namespace only): sanitized server config, version history, plugin catalog, and with `--sudo`, audit devices, registered plugin details and plugin runtimes.
@@ -123,3 +135,7 @@ Saved scans are encrypted. JSON printed with `--no-save`, `--output` or `mitch e
 ## Tested versions
 
 Integration tests run against Vault Community 1.19.5 and 2.2.2 on every pull request. Enterprise namespace handling is covered by unit tests against a simulated Vault, but has not been run against a real Vault Enterprise cluster yet.
+
+---
+
+**Next:** [Reports](reports.md)

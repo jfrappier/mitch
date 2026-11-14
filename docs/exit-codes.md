@@ -1,3 +1,5 @@
+[Mitch docs](README.md) › Exit codes
+
 # Exit codes
 
 Every Mitch command exits with one of these codes, so scripts and CI jobs can react to a specific outcome. The source of truth is [`internal/exitcode/exitcode.go`](../internal/exitcode/exitcode.go).

@@ -1,3 +1,5 @@
+[Mitch docs](README.md) › Saving scans
+
 # Saving scans
 
 `mitch scan` saves each scan, encrypted, in a local database. Later commands read from it, so you can look back at earlier scans. How the data is protected is described in [data-security.md](data-security.md).
@@ -91,3 +93,7 @@ These work on `init`, `scan`, `history`, `export`, `report`, `diff` and `passphr
 | `no passphrase given and no terminal to ask on` | Set `MITCH_PASSPHRASE` or pass `--passphrase-file`. |
 | `the two passphrases do not match` | Run `mitch init` again. Nothing was created. |
 | `... has permissions 0644; other users on this machine can read it` | Run the `chmod 600` command in the message. |
+
+---
+
+**Next:** [Scanning Vault](scanning.md)

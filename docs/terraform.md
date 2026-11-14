@@ -1,6 +1,18 @@
+[Mitch docs](README.md) › Generating Terraform
+
 # Generating Terraform
 
 `mitch terraform` writes Terraform configuration for the Vault setup in a saved scan, with [import blocks](https://developer.hashicorp.com/terraform/language/import) so Terraform adopts what already exists instead of creating it again. It reads only the saved, encrypted scan and never contacts Vault.
+
+```mermaid
+flowchart LR
+    db[("Saved scan")] -- "mitch terraform" --> files["Terraform files<br>+ imports.tf"]
+    files -- "review, commit" --> git[("git")]
+    git -- "terraform plan" --> plan{"Only imports?"}
+    plan -- "yes" --> apply["terraform apply<br>records state only"]
+    plan -- "no" --> review["Review the difference<br>before applying"]
+    apply --> managed["Change Vault by<br>editing the files"]
+```
 
 This is the first step toward managing Vault as code (see [design-decisions.md](design-decisions.md#git-as-the-source-of-truth)): generate, review, commit to git, and let Terraform own the configuration from then on.
 
