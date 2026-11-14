@@ -10,7 +10,7 @@ Mitch looks for it in this order:
 
 | Source | Use it for |
 | --- | --- |
-| `--passphrase-file FILE` | Scripts. One trailing line break is ignored. Make the file readable only by you: `chmod 600 FILE` |
+| `--passphrase-file FILE` | Scripts. One trailing line break is ignored. The file must be readable only by you (`chmod 600 FILE`), or Mitch refuses it; see [Passphrase files](#passphrase-files). |
 | `MITCH_PASSPHRASE` environment variable | CI jobs and Docker, from your secret store |
 | A prompt | Running Mitch by hand. What you type is not shown. `mitch init` asks twice. |
 
@@ -75,12 +75,19 @@ Afterwards, update `MITCH_PASSPHRASE`, any passphrase files, and your password m
 
 ## Flags
 
+### Passphrase files
+
+Anyone who can read the passphrase file can decrypt every saved scan. So, like `ssh` with a private key that other users can read ([ssh(1), FILES](https://man.openbsd.org/ssh#FILES)), Mitch refuses a passphrase file that your group or other users can read, and exits with the `chmod 600` command to fix it. This applies to `--new-passphrase-file` too.
+
+`--allow-insecure-passphrase-file` turns the refusal into a warning. It is meant for CI and other non-interactive runs where you can't set the file's permissions, such as a secret mounted into a container or a CI runner's secret file. Don't use it on a machine other people log in to. Prefer `MITCH_PASSPHRASE` from your CI secret store when you can.
+
 These work on `init`, `scan`, `history`, `export`, `report`, `diff` and `passphrase`:
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
 | `--db PATH` | `MITCH_DB`, else `mitch.db` | The database file. |
 | `--passphrase-file FILE` | none | Read the passphrase from this file instead of `MITCH_PASSPHRASE`. |
+| `--allow-insecure-passphrase-file` | off | Use a passphrase file that other users can read, with a warning. For CI and non-interactive runs only. |
 
 ## Common errors
 
@@ -90,4 +97,5 @@ These work on `init`, `scan`, `history`, `export`, `report`, `diff` and `passphr
 | `the passphrase is wrong, or the data was changed or damaged` | Check `MITCH_PASSPHRASE` or `--passphrase-file`. |
 | `no passphrase given and no terminal to ask on` | Set `MITCH_PASSPHRASE` or pass `--passphrase-file`. |
 | `the two passphrases do not match` | Run `mitch init` again. Nothing was created. |
-| `... has permissions 0644; other users on this machine can read it` | Run the `chmod 600` command in the message. |
+| `refusing to use the passphrase file: ... has permissions 0644` | Run the `chmod 600` command in the message. In CI or a container where you can't, pass `--allow-insecure-passphrase-file`. |
+| `... has permissions 0644; other users on this machine can read it` (a warning about the database) | Run the `chmod 600` command in the message. |
