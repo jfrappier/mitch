@@ -269,6 +269,21 @@ func (g *generator) writeSecretsEngine(namespace string, mount scan.Mount) {
 	if mount.PluginVersion != "" {
 		writeAttribute(body, "plugin_version", quote(mount.PluginVersion))
 	}
+	if mount.Config.ForceNoCache {
+		writeAttribute(body, "force_no_cache", "true")
+	}
+	if mount.Config.ListingVisibility != "" {
+		writeAttribute(body, "listing_visibility", quote(mount.Config.ListingVisibility))
+	}
+	writeListAttribute(body, "passthrough_request_headers", mount.Config.PassthroughRequestHeaders)
+	writeListAttribute(body, "allowed_response_headers", mount.Config.AllowedResponseHeaders)
+	writeListAttribute(body, "audit_non_hmac_request_keys", mount.Config.AuditNonHMACRequestKeys)
+	writeListAttribute(body, "audit_non_hmac_response_keys", mount.Config.AuditNonHMACResponseKeys)
+	writeListAttribute(body, "allowed_managed_keys", mount.Config.AllowedManagedKeys)
+	writeListAttribute(body, "delegated_auth_accessors", mount.Config.DelegatedAuthAccessors)
+	if mount.Config.IdentityTokenKey != "" {
+		writeAttribute(body, "identity_token_key", quote(mount.Config.IdentityTokenKey))
+	}
 	if len(mount.Options) > 0 {
 		writeAttribute(body, "options", stringMap(mount.Options))
 	}
@@ -311,6 +326,23 @@ func (g *generator) writeAuthMethod(namespace string, mount scan.Mount) {
 	}
 	if mount.Config.TokenType != "" {
 		fmt.Fprintf(tune, "    token_type = %s\n", quote(mount.Config.TokenType))
+	}
+	if mount.Config.ListingVisibility != "" {
+		fmt.Fprintf(tune, "    listing_visibility = %s\n", quote(mount.Config.ListingVisibility))
+	}
+	tuneLists := []struct {
+		name   string
+		values []string
+	}{
+		{"passthrough_request_headers", mount.Config.PassthroughRequestHeaders},
+		{"allowed_response_headers", mount.Config.AllowedResponseHeaders},
+		{"audit_non_hmac_request_keys", mount.Config.AuditNonHMACRequestKeys},
+		{"audit_non_hmac_response_keys", mount.Config.AuditNonHMACResponseKeys},
+	}
+	for _, tuneList := range tuneLists {
+		if len(tuneList.values) > 0 {
+			fmt.Fprintf(tune, "    %s = %s\n", tuneList.name, stringList(tuneList.values))
+		}
 	}
 	if tune.Len() > 0 {
 		fmt.Fprintf(body, "\n  tune {\n%s  }\n", tune.String())
@@ -480,6 +512,25 @@ func alignEquals(text string) string {
 // writeAttribute writes one "name = value" line inside a block.
 func writeAttribute(body *strings.Builder, name string, value string) {
 	fmt.Fprintf(body, "  %s = %s\n", name, value)
+}
+
+// writeListAttribute writes "name = [...]" when values is not empty. An empty
+// list is left out, which matches what the provider reads for an unset value.
+func writeListAttribute(body *strings.Builder, name string, values []string) {
+	if len(values) == 0 {
+		return
+	}
+	writeAttribute(body, name, stringList(values))
+}
+
+// stringList writes a list of strings as a one-line HCL list, in the order
+// Vault returned them.
+func stringList(values []string) string {
+	quoted := make([]string, 0, len(values))
+	for _, value := range values {
+		quoted = append(quoted, quote(value))
+	}
+	return "[" + strings.Join(quoted, ", ") + "]"
 }
 
 // stringMap writes a map of strings as an HCL object, keys sorted.
