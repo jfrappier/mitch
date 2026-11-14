@@ -1,3 +1,5 @@
+[Mitch docs](README.md) › The web UI
+
 # The web UI
 
 `mitch serve` runs a small web page for browsing saved scans: the list of scans, the report for each one (the same as `mitch report`), and the changes between two scans (the same as `mitch diff`). It reads only the saved, encrypted scans. It never contacts Vault, never starts a scan, and never changes the database.

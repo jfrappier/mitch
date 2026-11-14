@@ -1,3 +1,5 @@
+[Mitch docs](README.md) › How Mitch protects your data
+
 # How Mitch protects your data
 
 Mitch saves each scan in a local SQLite file, encrypted with a key that only your passphrase can unlock. A stolen database file or a leaked backup is unreadable without the passphrase. To set it up, see [saving-scans.md](saving-scans.md).
@@ -24,6 +26,14 @@ Vault's own docs warn that key names are not filtered by policy and can contain 
 ## Encryption at rest
 
 Disk encryption alone is not enough: it doesn't protect data once the machine is unlocked, or a database copied into a backup. Mitch encrypts the data itself, using envelope encryption:
+
+```mermaid
+flowchart LR
+    pass["Your passphrase"] -- "Argon2id + salt" --> kek["Key-encryption key<br>(never stored)"]
+    kek -- "unwraps" --> wrapped[("Wrapped data key<br>in mitch.db")]
+    wrapped --> dk["Data key<br>(in memory only)"]
+    dk -- "AES-256-GCM,<br>bound to scan id" --> scans[("Encrypted scans<br>in mitch.db")]
+```
 
 1. `mitch init` creates a random 256-bit **data key**. Each scan is encrypted with it using AES-256-GCM from Go's standard library ([crypto/cipher](https://pkg.go.dev/crypto/cipher#NewGCM)), with a fresh random nonce each time.
 2. Each encrypted scan is bound to its scan id. A blob copied onto another row fails to decrypt instead of showing the wrong scan.

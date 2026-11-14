@@ -1,3 +1,5 @@
+[Mitch docs](README.md) › Comparing scans
+
 # Comparing scans
 
 `mitch diff` shows what changed in Vault between two saved scans: mounts, auth methods, ACL policies, KV secret counts, plugins, namespaces and server settings. It reads only the saved, encrypted scans and never contacts Vault.

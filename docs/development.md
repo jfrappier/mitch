@@ -1,3 +1,5 @@
+[Mitch docs](README.md) › Developing Mitch
+
 # Developing Mitch
 
 ## Requirements

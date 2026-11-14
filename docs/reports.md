@@ -1,3 +1,5 @@
+[Mitch docs](README.md) › Reports
+
 # Reports
 
 `mitch report` summarizes one saved scan: what is in Vault, counted and grouped, and anything the scan could not read. It reads only the saved, encrypted scan and never contacts Vault.
@@ -69,3 +71,7 @@ The file's format comes from its extension: `.json` or `.md`, in any case. Any o
 ## The output is plain text
 
 The report describes your Vault's layout from the encrypted scan, so Mitch logs a warning each time it shows or saves one. See [data-security.md](data-security.md#plain-text-output).
+
+---
+
+**Next:** [Comparing scans](comparing-scans.md)
