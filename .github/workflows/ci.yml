@@ -4,7 +4,8 @@
 #   lint  - golangci-lint with the settings in .golangci.yml
 #   dependency-pins - modernc.org/libc matches what modernc.org/sqlite requires
 #   test  - all tests with the race detector, on Linux and macOS
-#   integration - tests against real Vault dev servers (oldest and newest supported)
+#   integration - tests against real Vault dev servers (oldest and newest supported),
+#                 including "terraform plan" on what "mitch terraform" writes
 #   build - a static binary for every platform Mitch ships for
 #
 # Any failing step fails the whole run.
@@ -104,6 +105,7 @@ jobs:
     env:
       MITCH_TEST_VAULT_ADDR: http://127.0.0.1:8200
       MITCH_TEST_VAULT_ROOT_TOKEN: root
+      TERRAFORM_VERSION: "1.17.2"
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -121,8 +123,23 @@ jobs:
           done
           echo "Vault did not become healthy after 30 attempts"
           exit 1
+      # The Terraform test runs "terraform plan" on what "mitch terraform"
+      # writes. The binary is checked against HashiCorp's SHA256SUMS file.
+      # Docs: https://developer.hashicorp.com/terraform/install
+      - name: Install Terraform ${{ env.TERRAFORM_VERSION }}
+        run: |
+          set -euo pipefail
+          base="https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}"
+          zip="terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+          cd "$RUNNER_TEMP"
+          curl --fail --show-error --no-progress-meter --location --output "$zip" --write-out "${zip}: HTTP %{http_code}\n" "$base/$zip"
+          curl --fail --show-error --no-progress-meter --location --output SHA256SUMS --write-out "SHA256SUMS: HTTP %{http_code}\n" "$base/terraform_${TERRAFORM_VERSION}_SHA256SUMS"
+          grep " ${zip}\$" SHA256SUMS | sha256sum --check
+          unzip -q "$zip" -d terraform-bin
+          ./terraform-bin/terraform version
+          echo "MITCH_TEST_TERRAFORM=$RUNNER_TEMP/terraform-bin/terraform" >> "$GITHUB_ENV"
       - name: Integration tests against Vault ${{ matrix.vault }}
-        run: go test -tags integration -race -count=1 -v ./...
+        run: go test -tags "integration terraform" -race -count=1 -v ./...
 
   build:
     strategy:
