@@ -35,7 +35,9 @@ docker run --rm -v mitch-data:/data -v "$PWD/passphrase:/run/secrets/mitch_passp
   mitch init --passphrase-file /run/secrets/mitch_passphrase
 ```
 
-On Linux, the container reads the file as uid 65532, so that user must be able to read it. Docker Desktop on macOS handles this for you.
+Mitch refuses a passphrase file that other users can read (see [saving-scans.md](saving-scans.md#passphrase-files)). On Linux, the container reads the file as uid 65532, so give the file to that user and keep it private: `sudo chown 65532 passphrase && sudo chmod 600 passphrase`.
+
+If you can't change the file's owner or permissions, for example a secret your CI system mounts, add `--allow-insecure-passphrase-file`. Mitch then logs a warning and continues. This flag is meant for CI and other non-interactive runs.
 
 Or add `-it` (`docker run --rm -it ...`) and Mitch asks for the passphrase without showing what you type.
 
