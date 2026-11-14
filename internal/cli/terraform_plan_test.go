@@ -2,11 +2,20 @@
 
 // This test runs the Terraform that Mitch generates through a real
 // "terraform init" and "terraform plan" against a Vault dev server, and
-// checks the plan only imports: nothing added, changed or destroyed.
+// checks the plan only imports: nothing added or destroyed, and no change
+// that would reach Vault.
 //
 // It needs the integration settings (see integration_test.go) plus:
 //
 //	MITCH_TEST_TERRAFORM   path to a terraform binary (1.5 or later)
+//
+// One change is expected and allowed: the provider's "disable_remount"
+// setting on vault_auth_backend. It exists only in Terraform (Vault has no such
+// setting), import leaves it empty in state, and the config default is false,
+// so every imported auth method plans "+ disable_remount = false". Applying it
+// only writes Terraform state and makes no call to Vault. The test reads the
+// plan as JSON and fails on any other change.
+// Source: https://github.com/hashicorp/terraform-provider-vault/blob/v5.13.0/internal/provider/schema_util.go
 //
 // "terraform init" downloads the hashicorp/vault provider from the
 // Terraform registry. Run it with:
@@ -16,6 +25,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -105,18 +115,89 @@ func TestTerraformPlanOnlyImports(t *testing.T) {
 	runTerraformBinary(t, terraformBinary, outputDirectory, "fmt", "-check", "-recursive", "-no-color")
 	runTerraformBinary(t, terraformBinary, outputDirectory, "init", "-input=false", "-no-color")
 	runTerraformBinary(t, terraformBinary, outputDirectory, "validate", "-no-color")
-	planOutput := runTerraformBinary(t, terraformBinary, outputDirectory, "plan", "-input=false", "-no-color")
+	planOutput := runTerraformBinary(t, terraformBinary, outputDirectory, "plan", "-input=false", "-no-color", "-out=plan.tfplan")
 
 	summary := planSummary.FindStringSubmatch(planOutput)
 	if summary == nil {
 		t.Fatalf("the plan has no summary line:\n%s", planOutput)
 	}
-	if summary[2] != "0" || summary[3] != "0" || summary[4] != "0" {
-		t.Errorf("the plan must only import, but it shows %s to add, %s to change, %s to destroy:\n%s", summary[2], summary[3], summary[4], planOutput)
+	if summary[2] != "0" || summary[4] != "0" {
+		t.Errorf("the plan must not add or destroy anything, but it shows %s to add, %s to destroy:\n%s", summary[2], summary[4], planOutput)
 	}
 	if summary[1] != strconv.Itoa(expectedImports) {
 		t.Errorf("expected %d imports (one per generated resource), the plan shows %s:\n%s", expectedImports, summary[1], planOutput)
 	}
+
+	// Every change must be only the Terraform-only disable_remount setting.
+	planJSON := runTerraformBinary(t, terraformBinary, outputDirectory, "show", "-json", "-no-color", "plan.tfplan")
+	for _, problem := range unexpectedPlanChanges(t, planJSON) {
+		t.Errorf("unexpected change in the plan: %s\n%s", problem, planOutput)
+	}
+}
+
+// plannedChanges is the part of "terraform show -json" this test reads.
+// Docs: https://developer.hashicorp.com/terraform/internals/json-format
+type plannedChanges struct {
+	ResourceChanges []struct {
+		Address string `json:"address"`
+		Type    string `json:"type"`
+		Change  struct {
+			Actions []string               `json:"actions"`
+			Before  map[string]interface{} `json:"before"`
+			After   map[string]interface{} `json:"after"`
+		} `json:"change"`
+	} `json:"resource_changes"`
+}
+
+// unexpectedPlanChanges lists every planned change other than an import
+// ("no-op") or a vault_auth_backend update where disable_remount is the only
+// attribute that differs.
+func unexpectedPlanChanges(t *testing.T, planJSON string) []string {
+	t.Helper()
+	var plan plannedChanges
+	err := json.Unmarshal([]byte(planJSON), &plan)
+	if err != nil {
+		t.Fatalf("could not read the plan JSON: %v", err)
+	}
+
+	problems := []string{}
+	for _, resource := range plan.ResourceChanges {
+		actions := strings.Join(resource.Change.Actions, ",")
+		if actions == "no-op" {
+			continue
+		}
+		if actions != "update" || resource.Type != "vault_auth_backend" {
+			problems = append(problems, resource.Address+" plans "+actions)
+			continue
+		}
+		for _, name := range changedAttributes(resource.Change.Before, resource.Change.After) {
+			if name != "disable_remount" {
+				problems = append(problems, resource.Address+" changes "+name)
+			}
+		}
+	}
+	return problems
+}
+
+// changedAttributes names the top-level attributes whose values differ
+// between before and after. The values are compared as JSON text.
+func changedAttributes(before map[string]interface{}, after map[string]interface{}) []string {
+	names := map[string]bool{}
+	for name := range before {
+		names[name] = true
+	}
+	for name := range after {
+		names[name] = true
+	}
+	changed := []string{}
+	for name := range names {
+		beforeText, _ := json.Marshal(before[name])
+		afterText, _ := json.Marshal(after[name])
+		if string(beforeText) != string(afterText) {
+			changed = append(changed, name)
+		}
+	}
+	return changed
 }
 
 // runTerraformBinary runs one terraform command in directory and fails the test,

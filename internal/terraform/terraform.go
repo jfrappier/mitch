@@ -36,9 +36,12 @@ const (
 
 // Mounts that Vault creates itself and that cannot be enabled, disabled or
 // moved, so Terraform must not manage them.
+// This is Vault's own "protectedMounts" list (vault/mount.go). Vault 2.x adds
+// agent-registry/, which every Vault 2.x server has.
+// Source: https://github.com/hashicorp/vault/blob/main/vault/mount.go
 // Docs: https://developer.hashicorp.com/vault/docs/secrets/cubbyhole and
 // https://developer.hashicorp.com/vault/docs/secrets/identity
-var builtInSecretsEngines = map[string]bool{"sys/": true, "identity/": true, "cubbyhole/": true}
+var builtInSecretsEngines = map[string]bool{"sys/": true, "identity/": true, "cubbyhole/": true, "agent-registry/": true}
 
 // builtInAuthMethods are auth methods Vault creates itself.
 var builtInAuthMethods = map[string]bool{"token/": true}
@@ -296,13 +299,15 @@ func (g *generator) writeAuthMethod(namespace string, mount scan.Mount) {
 		writeAttribute(body, "local", "true")
 	}
 
-	// The tune block holds TTLs and the token type. Durations are strings.
+	// The tune block holds TTLs and the token type. Durations are strings,
+	// written the way the provider reads them back from Vault ("1h", not
+	// "3600s"), or the plan would show a change for every imported TTL.
 	tune := &strings.Builder{}
 	if mount.Config.DefaultLeaseTTL != 0 {
-		fmt.Fprintf(tune, "    default_lease_ttl = %s\n", quote(fmt.Sprintf("%ds", mount.Config.DefaultLeaseTTL)))
+		fmt.Fprintf(tune, "    default_lease_ttl = %s\n", quote(providerDuration(mount.Config.DefaultLeaseTTL)))
 	}
 	if mount.Config.MaxLeaseTTL != 0 {
-		fmt.Fprintf(tune, "    max_lease_ttl = %s\n", quote(fmt.Sprintf("%ds", mount.Config.MaxLeaseTTL)))
+		fmt.Fprintf(tune, "    max_lease_ttl = %s\n", quote(providerDuration(mount.Config.MaxLeaseTTL)))
 	}
 	if mount.Config.TokenType != "" {
 		fmt.Fprintf(tune, "    token_type = %s\n", quote(mount.Config.TokenType))
@@ -335,11 +340,10 @@ func (g *generator) writePolicy(namespace string, policy scan.Policy) error {
 		return fmt.Errorf("two policies in namespace %q map to the same file name %s; rename one of them in Vault", namespaceLabel(namespace), fileName)
 	}
 
-	text := policy.Text
-	if !strings.HasSuffix(text, "\n") {
-		text = text + "\n"
-	}
-	g.policyFiles[fileName] = []byte(text)
+	// The file holds exactly the text Vault returned. Adding a final line
+	// break would make the plan show a change, because the provider compares
+	// the file's text with Vault's text byte for byte.
+	g.policyFiles[fileName] = []byte(policy.Text)
 
 	fmt.Fprintf(g.policies, "\nresource \"vault_policy\" %s {\n%s  name = %s\n  policy = file(\"${path.module}/%s\")\n}\n",
 		quote(resourceName), g.providerLine(namespace), quote(policy.Name), escapeTemplate(fileName))
@@ -408,6 +412,22 @@ func (g *generator) uniqueName(base string) string {
 	}
 	g.usedNames[name] = true
 	return name
+}
+
+// providerDuration writes a number of seconds the way the Vault provider
+// writes auth method TTLs into Terraform state: Go's duration text with
+// trailing zero units removed, so 3600 is "1h", 5400 is "1h30m" and 90 is
+// "1m30s". This copies util.ShortDur from the provider.
+// Source: https://github.com/hashicorp/terraform-provider-vault/blob/v5.13.0/util/util.go
+func providerDuration(seconds int64) string {
+	text := (time.Duration(seconds) * time.Second).String()
+	if strings.HasSuffix(text, "m0s") {
+		text = strings.TrimSuffix(text, "0s")
+	}
+	if strings.HasSuffix(text, "h0m") {
+		text = strings.TrimSuffix(text, "0m")
+	}
+	return text
 }
 
 // attributeLine matches a one-line "name = value" inside a block, so

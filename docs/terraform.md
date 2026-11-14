@@ -29,10 +29,14 @@ Terraform reads `VAULT_ADDR` and `VAULT_TOKEN` like the Vault CLI does. The toke
 The plan should end with something like:
 
 ```text
-Plan: 14 to import, 0 to add, 0 to change, 0 to destroy.
+Plan: 14 to import, 0 to add, 1 to change, 0 to destroy.
 ```
 
-Anything to add, change or destroy is a difference between the files and Vault, usually because Vault changed after the scan. Review it before going further.
+That example has one auth method; the next paragraph explains its one change.
+
+One change is expected for each auth method: `+ disable_remount = false`. That is a setting of the Terraform provider only; Vault has no such setting. Import leaves it empty in Terraform state, and the provider's default is `false`, so Terraform plans to record it. Applying it writes only Terraform state and sends nothing to Vault ([provider source](https://github.com/hashicorp/terraform-provider-vault/blob/v5.13.0/internal/provider/schema_util.go)). So with 2 auth methods, expect `2 to change`.
+
+Anything else to add, change or destroy is a difference between the files and Vault, usually because Vault changed after the scan, or a setting Mitch does not record yet (see [What is left out](#what-is-left-out)). Review it before going further: applying it changes Vault.
 
 ## 3. Import
 
@@ -51,7 +55,7 @@ This only records the existing objects in Terraform state. After that, change Va
 | `namespaces.tf` | [`vault_namespace`](https://registry.terraform.io/providers/hashicorp/vault/latest/docs/resources/namespace) for each namespace. |
 | `secrets_engines.tf` | [`vault_mount`](https://registry.terraform.io/providers/hashicorp/vault/latest/docs/resources/mount) for each secrets engine: path, type, description, TTLs, options, local, seal wrap, external entropy and plugin version. |
 | `auth_methods.tf` | [`vault_auth_backend`](https://registry.terraform.io/providers/hashicorp/vault/latest/docs/resources/auth_backend) for each auth method, with TTLs and token type in its `tune` block. |
-| `policies.tf` and `policies/` | [`vault_policy`](https://registry.terraform.io/providers/hashicorp/vault/latest/docs/resources/policy) for each ACL policy. Each policy's text is its own `.hcl` file under `policies/<namespace>/`, loaded with `file()`, so policies are reviewed as policy files in git. |
+| `policies.tf` and `policies/` | [`vault_policy`](https://registry.terraform.io/providers/hashicorp/vault/latest/docs/resources/policy) for each ACL policy. Each policy's text is its own `.hcl` file under `policies/<namespace>/`, loaded with `file()`, so policies are reviewed as policy files in git. Each file holds exactly the text Vault returned; if an editor adds a final line break, the plan shows a policy change. |
 | `audit_devices.tf` | [`vault_audit`](https://registry.terraform.io/providers/hashicorp/vault/latest/docs/resources/audit) for each audit device. |
 | `imports.tf` | One import block per resource. |
 
@@ -64,8 +68,10 @@ Each namespace gets its own provider alias with `namespace` set, and every resou
 ### What is left out
 
 - **Secret values, always.** Importing KV secrets would copy their values into Terraform state.
-- **Objects Vault creates itself:** the `sys/`, `identity/` and `cubbyhole/` secrets engines, the `token/` auth method, and the `root` policy. The `default` policy is included, because you can edit it, but `terraform destroy` cannot remove it.
+- **Objects Vault creates itself:** the `sys/`, `identity/`, `cubbyhole/` and (Vault 2.x) `agent-registry/` secrets engines, the `token/` auth method, and the `root` policy. The `default` policy is included, because you can edit it, but `terraform destroy` cannot remove it.
 - **Anything the scan could not read.** Mitch logs a warning for each skipped check and for audit devices when the scan ran without `--sudo`.
+
+> **Not built yet:** these mount settings are not recorded by the scan, so they are not written: listing visibility, passthrough request headers, allowed response headers, and audit non-HMAC request and response keys. If you set any of them, the plan shows a change that removes them. Add them to the files by hand before you apply.
 
 > **Not built yet:** settings inside secrets engines and auth methods, such as LDAP or OIDC configuration and roles. These have their own resources, and some, such as an LDAP `bindpass`, need values Vault never returns.
 
