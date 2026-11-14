@@ -52,6 +52,7 @@ func commands() []command {
 		{name: "init", summary: "Create the encrypted database that saves scans", run: runInit},
 		{name: "scan", summary: "Scan a Vault cluster and save the inventory (--no-save prints JSON instead)", run: runScan},
 		{name: "history", summary: "List saved scans", run: runHistory},
+		{name: "passphrase", summary: "Change the passphrase that protects the database", run: runPassphrase},
 		{name: "report", summary: "Summarize a saved scan (Markdown in the terminal, --output FILE.json or FILE.md to save)", run: runReport},
 		{name: "diff", summary: "Show what changed between two saved scans (--output FILE.json or FILE.md to save)", run: runDiff},
 		{name: "export", summary: "Print a saved scan as JSON (SARIF not built yet)", run: runExport},
