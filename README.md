@@ -8,7 +8,7 @@ Mitch is a read-only inventory and audit tool for HashiCorp Vault.
 
 People often ask how to run reports in Vault, but Vault is not a CMDB or an inventory tool. Mitch scans a Vault cluster and stores what it finds, so you can answer questions like "how many secrets do we have?", "which plugins were installed by hand?", and "which policies are too broad?"
 
-> **Status:** early development. `mitch scan` works today: it inventories Vault, including secret counts for KV mounts, and saves each scan encrypted (`mitch init`, `mitch history`, `mitch export`), summarizes a scan (`mitch report`), and shows what changed between two scans (`mitch diff`). Terraform and policy findings are not built yet. See [Scanning Vault](docs/scanning.md), [Saving scans](docs/saving-scans.md), [Reports](docs/reports.md) and [Comparing scans](docs/comparing-scans.md).
+> **Status:** early development. `mitch scan` works today: it inventories Vault, including secret counts for KV mounts, and saves each scan encrypted (`mitch init`, `mitch history`, `mitch export`), summarizes a scan (`mitch report`), shows what changed between two scans (`mitch diff`), and writes Terraform to manage the config (`mitch terraform`). Policy findings are not built yet. See [Scanning Vault](docs/scanning.md), [Saving scans](docs/saving-scans.md), [Reports](docs/reports.md), [Comparing scans](docs/comparing-scans.md) and [Generating Terraform](docs/terraform.md).
 
 ## What Mitch will do
 
@@ -30,6 +30,7 @@ People often ask how to run reports in Vault, but Vault is not a CMDB or an inve
 - [Saving scans](docs/saving-scans.md): the encrypted database and passphrase
 - [Reports](docs/reports.md): a summary of one scan, in Markdown or JSON
 - [Comparing scans](docs/comparing-scans.md): what changed between two scans
+- [Generating Terraform](docs/terraform.md): import your Vault config into Terraform
 - [Design decisions](docs/design-decisions.md) and what each means for you
 - [How Mitch protects your data](docs/data-security.md)
 - [Logging](docs/logging.md)

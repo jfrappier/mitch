@@ -64,10 +64,16 @@ Run the tests:
 MITCH_TEST_VAULT_ADDR=http://127.0.0.1:8200 MITCH_TEST_VAULT_ROOT_TOKEN=root go test -tags integration -count=1 -v ./...
 ```
 
+To also check the generated Terraform with a real `terraform plan`, add the `terraform` tag and point `MITCH_TEST_TERRAFORM` at a Terraform 1.5+ binary ([install Terraform](https://developer.hashicorp.com/terraform/install)). `terraform init` downloads the `hashicorp/vault` provider, so this needs internet access:
+
+```shell
+MITCH_TEST_VAULT_ADDR=http://127.0.0.1:8200 MITCH_TEST_VAULT_ROOT_TOKEN=root MITCH_TEST_TERRAFORM="$(command -v terraform)" go test -tags "integration terraform" -count=1 -v -run TestTerraform ./internal/cli/
+```
+
 Remove the server when you are done:
 
 ```shell
 docker rm -f vault-dev
 ```
 
-CI runs the same tests against Vault 1.19.5 and 2.2.2. Never point these variables at a real cluster: the tests create policies and tokens.
+CI runs the same tests, including the Terraform one, against Vault 1.19.5 and 2.2.2. Never point these variables at a real cluster: the tests create policies and tokens.
