@@ -31,7 +31,7 @@ Disk encryption alone is not enough: it doesn't protect data once the machine is
 4. Passphrases must be at least 12 characters. A wrong passphrase is rejected before anything is read.
 5. The passphrase comes from a prompt that does not show what you type, `MITCH_PASSPHRASE`, or `--passphrase-file`. Mitch never writes it to disk or to logs.
 
-The database file is created readable only by its owner (`0600`). Mitch warns you if the file or a `--passphrase-file` can be read by other users, with the `chmod` command to fix it.
+The database file is created readable only by its owner (`0600`). Mitch warns you if the database can be read by other users, with the `chmod` command to fix it. It refuses a `--passphrase-file` that other users can read, because that file unlocks everything; `--allow-insecure-passphrase-file` overrides this for CI and non-interactive runs (see [saving-scans.md](saving-scans.md#passphrase-files)).
 
 ## Changing the passphrase
 
