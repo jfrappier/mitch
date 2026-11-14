@@ -53,8 +53,8 @@ This only records the existing objects in Terraform state. After that, change Va
 | `versions.tf` | The Terraform and provider versions. |
 | `providers.tf` | The provider, plus one alias per Enterprise namespace. |
 | `namespaces.tf` | [`vault_namespace`](https://registry.terraform.io/providers/hashicorp/vault/latest/docs/resources/namespace) for each namespace. |
-| `secrets_engines.tf` | [`vault_mount`](https://registry.terraform.io/providers/hashicorp/vault/latest/docs/resources/mount) for each secrets engine: path, type, description, TTLs, options, local, seal wrap, external entropy and plugin version. |
-| `auth_methods.tf` | [`vault_auth_backend`](https://registry.terraform.io/providers/hashicorp/vault/latest/docs/resources/auth_backend) for each auth method, with TTLs and token type in its `tune` block. |
+| `secrets_engines.tf` | [`vault_mount`](https://registry.terraform.io/providers/hashicorp/vault/latest/docs/resources/mount) for each secrets engine: path, type, description, TTLs, options, local, seal wrap, external entropy, plugin version, caching, listing visibility, passthrough request headers, allowed response headers, audit non-HMAC keys, and (Enterprise) managed keys, delegated auth accessors and identity token key. |
+| `auth_methods.tf` | [`vault_auth_backend`](https://registry.terraform.io/providers/hashicorp/vault/latest/docs/resources/auth_backend) for each auth method, with TTLs, token type, listing visibility, passthrough request headers, allowed response headers and audit non-HMAC keys in its `tune` block. |
 | `policies.tf` and `policies/` | [`vault_policy`](https://registry.terraform.io/providers/hashicorp/vault/latest/docs/resources/policy) for each ACL policy. Each policy's text is its own `.hcl` file under `policies/<namespace>/`, loaded with `file()`, so policies are reviewed as policy files in git. Each file holds exactly the text Vault returned; if an editor adds a final line break, the plan shows a policy change. |
 | `audit_devices.tf` | [`vault_audit`](https://registry.terraform.io/providers/hashicorp/vault/latest/docs/resources/audit) for each audit device. |
 | `imports.tf` | One import block per resource. |
@@ -71,7 +71,7 @@ Each namespace gets its own provider alias with `namespace` set, and every resou
 - **Objects Vault creates itself:** the `sys/`, `identity/`, `cubbyhole/` and (Vault 2.x) `agent-registry/` secrets engines, the `token/` auth method, and the `root` policy. The `default` policy is included, because you can edit it, but `terraform destroy` cannot remove it.
 - **Anything the scan could not read.** Mitch logs a warning for each skipped check and for audit devices when the scan ran without `--sudo`.
 
-> **Not built yet:** these mount settings are not recorded by the scan, so they are not written: listing visibility, passthrough request headers, allowed response headers, and audit non-HMAC request and response keys. If you set any of them, the plan shows a change that removes them. Add them to the files by hand before you apply.
+Scans saved by a Mitch build from before 2026-11-14 do not record caching, listing visibility, headers, audit non-HMAC keys, managed keys, delegated auth accessors or identity token keys. Scan again before generating, or the plan shows a change that removes any of those you set.
 
 > **Not built yet:** settings inside secrets engines and auth methods, such as LDAP or OIDC configuration and roles. These have their own resources, and some, such as an LDAP `bindpass`, need values Vault never returns.
 

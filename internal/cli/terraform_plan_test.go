@@ -59,8 +59,17 @@ func TestTerraformPlanOnlyImports(t *testing.T) {
 	err := vault.root.Sys().Mount("tf-plan-kv", &vaultapi.MountInput{
 		Type:        "kv",
 		Description: `team "a" ${not_a_template}`,
-		Config:      vaultapi.MountConfigInput{MaxLeaseTTL: "2h", DefaultLeaseTTL: "1h"},
-		Options:     map[string]string{"version": "2"},
+		Config: vaultapi.MountConfigInput{
+			MaxLeaseTTL:               "2h",
+			DefaultLeaseTTL:           "1h",
+			ForceNoCache:              true,
+			ListingVisibility:         "unauth",
+			PassthroughRequestHeaders: []string{"X-Team", "X-Request-Source"},
+			AllowedResponseHeaders:    []string{"X-Answer"},
+			AuditNonHMACRequestKeys:   []string{"team"},
+			AuditNonHMACResponseKeys:  []string{"team", "owner"},
+		},
+		Options: map[string]string{"version": "2"},
 	})
 	if err != nil {
 		t.Fatalf("enabling the tf-plan-kv mount failed: %v", err)
@@ -70,7 +79,15 @@ func TestTerraformPlanOnlyImports(t *testing.T) {
 	err = vault.root.Sys().EnableAuthWithOptions("tf-plan-userpass", &vaultapi.EnableAuthOptions{
 		Type:        "userpass",
 		Description: "people",
-		Config:      vaultapi.MountConfigInput{DefaultLeaseTTL: "1h", MaxLeaseTTL: "4h"},
+		Config: vaultapi.MountConfigInput{
+			DefaultLeaseTTL:           "1h",
+			MaxLeaseTTL:               "4h",
+			ListingVisibility:         "unauth",
+			PassthroughRequestHeaders: []string{"X-Team"},
+			AllowedResponseHeaders:    []string{"X-Answer", "X-Other"},
+			AuditNonHMACRequestKeys:   []string{"username"},
+			AuditNonHMACResponseKeys:  []string{"policies"},
+		},
 	})
 	if err != nil {
 		t.Fatalf("enabling the tf-plan-userpass auth method failed: %v", err)

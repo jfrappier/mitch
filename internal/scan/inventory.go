@@ -178,11 +178,34 @@ type Mount struct {
 }
 
 // MountConfig is the "config" object of a mount. TTLs are in seconds.
+// Vault leaves the optional settings out when they are not set, and so does
+// Mitch, so scans saved before these fields existed read the same way.
+// Docs: https://developer.hashicorp.com/vault/api-docs/system/mounts and
+// https://developer.hashicorp.com/vault/api-docs/system/auth
 type MountConfig struct {
 	DefaultLeaseTTL int64  `json:"default_lease_ttl"`
 	MaxLeaseTTL     int64  `json:"max_lease_ttl"`
 	ForceNoCache    bool   `json:"force_no_cache"`
 	TokenType       string `json:"token_type,omitempty"`
+
+	// ListingVisibility is "unauth" when the mount is listed in the UI
+	// without a token, or empty ("hidden").
+	ListingVisibility string `json:"listing_visibility,omitempty"`
+	// PassthroughRequestHeaders are request headers Vault passes to the plugin.
+	PassthroughRequestHeaders []string `json:"passthrough_request_headers,omitempty"`
+	// AllowedResponseHeaders are response headers the plugin may set.
+	AllowedResponseHeaders []string `json:"allowed_response_headers,omitempty"`
+	// AuditNonHMACRequestKeys and AuditNonHMACResponseKeys are request and
+	// response keys written to audit logs in clear text instead of hashed.
+	AuditNonHMACRequestKeys  []string `json:"audit_non_hmac_request_keys,omitempty"`
+	AuditNonHMACResponseKeys []string `json:"audit_non_hmac_response_keys,omitempty"`
+	// AllowedManagedKeys are Enterprise managed keys the mount may use.
+	AllowedManagedKeys []string `json:"allowed_managed_keys,omitempty"`
+	// DelegatedAuthAccessors are auth method accessors the mount may delegate
+	// authentication to.
+	DelegatedAuthAccessors []string `json:"delegated_auth_accessors,omitempty"`
+	// IdentityTokenKey is the key that signs plugin workload identity tokens.
+	IdentityTokenKey string `json:"identity_token_key,omitempty"`
 }
 
 // Policy is one ACL policy and its HCL text.
