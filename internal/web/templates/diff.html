@@ -1,0 +1,30 @@
+{{define "content"}}
+{{with .Diff}}
+<ul class="facts">
+  <li>From scan <a href="/scans/{{.From.ID}}"><code>{{.From.ID}}</code></a>: {{when .From.StartedAt}}, Vault {{.From.VaultVersion}}</li>
+  <li>To scan <a href="/scans/{{.To.ID}}"><code>{{.To.ID}}</code></a>: {{when .To.StartedAt}}, Vault {{.To.VaultVersion}}</li>
+</ul>
+{{if .Warnings}}
+<h2>Warnings</h2>
+<ul class="warnings">{{range .Warnings}}<li>{{.}}</li>{{end}}</ul>
+{{end}}
+{{if not .HasChanges}}
+<p>No changes.</p>
+{{else}}
+{{range .Sections}}
+<h2>{{sectionTitle .Name}}{{if .Namespace}} in namespace {{.Namespace}}{{end}}</h2>
+<pre class="diff">
+{{- range .Added}}<span class="added">+ {{.}}</span>
+{{end}}
+{{- range .Removed}}<span class="removed">- {{.}}</span>
+{{end}}
+{{- range .Changed}}<span class="changed">~ {{.Key}}</span>
+{{range .Fields}}    {{.Field}}: {{.Old}} -&gt; {{.New}}
+{{end}}
+{{- range .TextLines}}  {{.}}
+{{end}}
+{{- end}}</pre>
+{{end}}
+{{end}}
+{{end}}
+{{end}}

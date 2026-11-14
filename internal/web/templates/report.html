@@ -1,0 +1,110 @@
+{{define "content"}}
+{{with .Report}}
+<ul class="facts">
+  <li>Vault {{.Scan.VaultVersion}}{{if .Scan.Enterprise}} Enterprise{{end}} at {{.Scan.VaultAddress}}{{if .Scan.ClusterName}} (cluster {{.Scan.ClusterName}}){{end}}</li>
+  <li>Started {{when .Scan.StartedAt}}, finished {{when .Scan.FinishedAt}}, by Mitch {{.Scan.MitchVersion}}{{if .Scan.SudoRequested}}, with --sudo{{end}}</li>
+</ul>
+
+{{if .Skipped}}
+<p class="error">This scan skipped {{len .Skipped}} check(s), so parts of this report are missing. See <a href="#gaps">Scan gaps</a>.</p>
+{{end}}
+
+<h2>Summary</h2>
+<div class="table-wrap"><table>
+<tbody>
+<tr><th>Namespaces</th><td>{{.Summary.Namespaces}}</td></tr>
+<tr><th>Secrets engines</th><td>{{.Summary.SecretsEngines}}</td></tr>
+<tr><th>Auth methods</th><td>{{.Summary.AuthMethods}}</td></tr>
+<tr><th>ACL policies</th><td>{{.Summary.ACLPolicies}}</td></tr>
+<tr><th>KV secrets</th><td>{{if .Summary.KVCounted}}{{.Summary.KVSecrets}} in {{.Summary.KVFolders}} folder(s), {{.Summary.KVMounts}} mount(s){{if not .Summary.KVComplete}} (at least; some mounts were only partly listed){{end}}{{else}}not counted{{end}}</td></tr>
+<tr><th>Plugins</th><td>{{.Summary.BuiltinPlugins}} built in, {{.Summary.RegisteredPlugins}} registered by hand</td></tr>
+<tr><th>Deprecated</th><td>{{.Summary.Deprecated}}</td></tr>
+<tr><th>Skipped checks</th><td>{{.Summary.SkippedChecks}}</td></tr>
+</tbody>
+</table></div>
+
+{{if .Deprecated}}
+<h2>Deprecated</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Where</th><th>Kind</th><th>Name</th><th>Status</th></tr></thead>
+<tbody>{{range .Deprecated}}<tr><td>{{namespace .Where}}</td><td>{{.Kind}}</td><td>{{.Name}}</td><td>{{.Status}}</td></tr>{{end}}</tbody>
+</table></div>
+{{end}}
+
+<h2>Mount types</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Kind</th><th>Type</th><th>Count</th></tr></thead>
+<tbody>{{range .MountTypes}}<tr><td>{{.Kind}}</td><td>{{.Type}}</td><td>{{.Count}}</td></tr>{{end}}</tbody>
+</table></div>
+
+<h2>Secrets engines</h2>
+{{template "mounts" .SecretsEngines}}
+
+<h2>Auth methods</h2>
+{{template "mounts" .AuthMethods}}
+
+{{if .KVCounts}}
+<h2>KV secret counts</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Namespace</th><th>Mount</th><th>KV version</th><th>Secrets</th><th>Folders</th><th>Complete</th></tr></thead>
+<tbody>{{range .KVCounts}}<tr><td>{{namespace .Namespace}}</td><td>{{.Mount}}</td><td>{{.KVVersion}}</td><td>{{.Secrets}}</td><td>{{.Folders}}</td><td>{{if .Complete}}yes{{else}}no{{end}}</td></tr>{{end}}</tbody>
+</table></div>
+{{end}}
+
+<h2>ACL policies</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Namespace</th><th>Name</th><th>Lines</th></tr></thead>
+<tbody>{{range .ACLPolicies}}<tr><td>{{namespace .Namespace}}</td><td>{{.Name}}</td><td>{{.Lines}}</td></tr>{{end}}</tbody>
+</table></div>
+
+<h2>Audit devices</h2>
+{{if .AuditDevices}}
+<div class="table-wrap"><table>
+<thead><tr><th>Path</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>{{range .AuditDevices}}<tr><td>{{.Path}}</td><td>{{.Type}}</td><td>{{.Description}}</td></tr>{{end}}</tbody>
+</table></div>
+{{else}}
+<p>Not collected. Audit devices are only read when the scan runs with <code>--sudo</code>.</p>
+{{end}}
+
+{{if .RegisteredPlugins}}
+<h2>Plugins registered by hand</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Type</th><th>Name</th><th>Version</th><th>SHA-256</th><th>OCI image</th><th>Status</th></tr></thead>
+<tbody>{{range .RegisteredPlugins}}<tr><td>{{.Type}}</td><td>{{.Name}}</td><td>{{.Version}}</td><td><code>{{.SHA256}}</code></td><td>{{.OCIImage}}</td><td>{{.DeprecationStatus}}</td></tr>{{end}}</tbody>
+</table></div>
+{{end}}
+
+{{if .VersionHistory}}
+<h2>Vault version history</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Version</th><th>Previous</th><th>Installed</th><th>Build date</th></tr></thead>
+<tbody>{{range .VersionHistory}}<tr><td>{{.Version}}</td><td>{{.PreviousVersion}}</td><td>{{.TimestampInstalled}}</td><td>{{.BuildDate}}</td></tr>{{end}}</tbody>
+</table></div>
+{{end}}
+
+{{if or .Skipped .NotRequested}}
+<h2 id="gaps">Scan gaps</h2>
+{{if .Skipped}}
+<div class="table-wrap"><table>
+<thead><tr><th>Check</th><th>Namespace</th><th>Path</th><th>HTTP status</th><th>Reason</th><th>Next step</th></tr></thead>
+<tbody>{{range .Skipped}}<tr><td>{{.Check}}</td><td>{{namespace .Namespace}}</td><td>{{.Path}}</td><td>{{if .HTTPStatus}}{{.HTTPStatus}}{{else}}not sent{{end}}</td><td>{{.Reason}}</td><td>{{.NextStep}}</td></tr>{{end}}</tbody>
+</table></div>
+{{end}}
+{{if .NotRequested}}
+<ul>{{range .NotRequested}}<li><strong>{{.Check}}</strong>: {{.Reason}}</li>{{end}}</ul>
+{{end}}
+{{end}}
+{{end}}
+{{end}}
+
+{{define "mounts"}}
+{{if .}}
+<div class="table-wrap"><table>
+<thead><tr><th>Namespace</th><th>Path</th><th>Type</th><th>Plugin version</th><th>Description</th><th>Status</th></tr></thead>
+<tbody>{{range .}}<tr><td>{{namespace .Namespace}}</td><td>{{.Path}}</td><td>{{.Type}}</td><td>{{.PluginVersion}}</td><td>{{.Description}}</td><td>{{.DeprecationStatus}}</td></tr>{{end}}</tbody>
+</table></div>
+{{else}}
+<p>None.</p>
+{{end}}
+{{end}}
