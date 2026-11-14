@@ -24,6 +24,10 @@ const (
 	// passphraseEnvVar holds the passphrase, for CI and Docker.
 	passphraseEnvVar = "MITCH_PASSPHRASE"
 
+	// newPassphraseEnvVar holds the new passphrase for "mitch passphrase",
+	// for scripted changes.
+	newPassphraseEnvVar = "MITCH_NEW_PASSPHRASE" //nolint:gosec // G101: the name of an environment variable, not a credential
+
 	// defaultDatabasePath is used when neither --db nor MITCH_DB is set.
 	defaultDatabasePath = "mitch.db"
 )
@@ -41,14 +45,37 @@ var readHiddenLine = func() ([]byte, error) {
 	return term.ReadPassword(int(os.Stdin.Fd())) //nolint:gosec // a file descriptor always fits in int
 }
 
-// passphraseUse says whether a passphrase is being set for the first time
-// (so it is asked twice) or used to unlock an existing database.
+// passphraseUse says what a passphrase is for. A passphrase that is being
+// set (for a new database, or to replace the current one) is asked twice.
 type passphraseUse int
 
 const (
 	unlockPassphrase passphraseUse = iota
 	newPassphrase
+	replacementPassphrase
 )
+
+// promptText is what the terminal shows when asking for a passphrase.
+type promptText struct {
+	first    string
+	repeat   string
+	mismatch string
+}
+
+// promptTexts holds the prompts for each use.
+var promptTexts = map[passphraseUse]promptText{
+	unlockPassphrase: {first: "Passphrase: "},
+	newPassphrase: {
+		first:    "Passphrase: ",
+		repeat:   "Repeat passphrase: ",
+		mismatch: "the two passphrases do not match; nothing was created",
+	},
+	replacementPassphrase: {
+		first:    "New passphrase: ",
+		repeat:   "Repeat new passphrase: ",
+		mismatch: "the two new passphrases do not match; nothing was changed",
+	},
+}
 
 // newKDFParams picks the Argon2id settings for "mitch init". Tests replace it
 // with cheaper settings so they run quickly.
@@ -105,7 +132,9 @@ func readPassphrase(runContext runContext, flags storeFlags, use passphraseUse) 
 // it. A new passphrase is asked twice, so a typo can't lock the user out.
 // Prompts go to standard error, so standard output stays clean for results.
 func promptForPassphrase(runContext runContext, use passphraseUse) ([]byte, error) {
-	fmt.Fprint(runContext.stderr, "Passphrase: ")
+	prompts := promptTexts[use]
+
+	fmt.Fprint(runContext.stderr, prompts.first)
 	first, err := readHiddenLine()
 	fmt.Fprintln(runContext.stderr)
 	if err != nil {
@@ -119,16 +148,39 @@ func promptForPassphrase(runContext runContext, use passphraseUse) ([]byte, erro
 		return first, nil
 	}
 
-	fmt.Fprint(runContext.stderr, "Repeat passphrase: ")
+	fmt.Fprint(runContext.stderr, prompts.repeat)
 	second, err := readHiddenLine()
 	fmt.Fprintln(runContext.stderr)
 	if err != nil {
 		return nil, fmt.Errorf("reading the passphrase from the terminal failed: %w", err)
 	}
 	if !bytes.Equal(first, second) {
-		return nil, errors.New("the two passphrases do not match; nothing was created")
+		return nil, errors.New(prompts.mismatch)
 	}
 	return first, nil
+}
+
+// readReplacementPassphrase gets the new passphrase for "mitch passphrase",
+// trying in order:
+//
+//  1. --new-passphrase-file
+//  2. the MITCH_NEW_PASSPHRASE environment variable
+//  3. a prompt (asked twice), when a person is at a terminal
+func readReplacementPassphrase(runContext runContext, newPassphraseFile string) ([]byte, error) {
+	if newPassphraseFile != "" {
+		return readPassphraseFile(runContext, newPassphraseFile)
+	}
+
+	fromEnvironment := os.Getenv(newPassphraseEnvVar)
+	if fromEnvironment != "" {
+		return []byte(fromEnvironment), nil
+	}
+
+	if !stdinIsTerminal() {
+		return nil, fmt.Errorf("no new passphrase given and no terminal to ask on: set %s or pass --new-passphrase-file", newPassphraseEnvVar)
+	}
+
+	return promptForPassphrase(runContext, replacementPassphrase)
 }
 
 // readPassphraseFile reads a passphrase from a file. One trailing line break
@@ -167,7 +219,11 @@ func openStore(ctx context.Context, runContext runContext, flags storeFlags) (*s
 	if err != nil {
 		return nil, err
 	}
+	return openStoreWithPassphrase(ctx, runContext, flags, passphrase)
+}
 
+// openStoreWithPassphrase is openStore for a passphrase the caller already read.
+func openStoreWithPassphrase(ctx context.Context, runContext runContext, flags storeFlags, passphrase []byte) (*store.Store, error) {
 	opened, err := store.Open(ctx, *flags.databasePath, passphrase)
 	if err != nil {
 		if errors.Is(err, encryption.ErrWrongPassphrase) {

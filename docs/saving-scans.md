@@ -57,9 +57,25 @@ mitch export --scan 4c245cda40efc84d --output scan.json
 
 `mitch export` prints one saved scan as JSON, in the same format as `mitch scan --no-save`. Without `--output` it prints to standard output. Either way the output is plain text, and Mitch logs a warning.
 
+## 5. Change the passphrase
+
+```shell
+mitch passphrase
+```
+
+Mitch asks for the current passphrase, then the new one twice. The new one must also be at least 12 characters. Your saved scans are kept.
+
+For scripts, give the current passphrase the usual way and the new one with `MITCH_NEW_PASSPHRASE` or `--new-passphrase-file FILE`:
+
+```shell
+MITCH_PASSPHRASE='<current>' MITCH_NEW_PASSPHRASE='<new>' mitch passphrase
+```
+
+Afterwards, update `MITCH_PASSPHRASE`, any passphrase files, and your password manager. The old passphrase no longer opens this database, but it still opens backups made before the change. See [data-security.md](data-security.md#changing-the-passphrase).
+
 ## Flags
 
-These work on `init`, `scan`, `history` and `export`:
+These work on `init`, `scan`, `history`, `export`, `report`, `diff` and `passphrase`:
 
 | Flag | Default | Meaning |
 | --- | --- | --- |

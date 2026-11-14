@@ -2,8 +2,6 @@
 
 Mitch saves each scan in a local SQLite file, encrypted with a key that only your passphrase can unlock. A stolen database file or a leaked backup is unreadable without the passphrase. To set it up, see [saving-scans.md](saving-scans.md).
 
-> **Not built yet:** changing the passphrase.
-
 ## What Mitch stores
 
 - Mount, auth method, plugin, namespace and configuration details from Vault.
@@ -34,6 +32,17 @@ Disk encryption alone is not enough: it doesn't protect data once the machine is
 5. The passphrase comes from a prompt that does not show what you type, `MITCH_PASSPHRASE`, or `--passphrase-file`. Mitch never writes it to disk or to logs.
 
 The database file is created readable only by its owner (`0600`). Mitch warns you if the file or a `--passphrase-file` can be read by other users, with the `chmod` command to fix it.
+
+## Changing the passphrase
+
+`mitch passphrase` wraps the same data key again with your new passphrase and a new salt. The saved scans are not re-encrypted, so the change is instant. See [saving-scans.md](saving-scans.md#5-change-the-passphrase).
+
+What a change does not do:
+
+- **Old copies still open with the old passphrase.** A backup made before the change holds the old wrapped key.
+- **The data key stays the same.** Someone who had both the old passphrase and an old copy of the file can recover the data key, and with it read newer copies too.
+
+If the old passphrase may have leaked together with a copy of the database, changing the passphrase is not enough: create a new database with `mitch init` and scan again.
 
 **A lost passphrase cannot be recovered.** No one, including the Mitch maintainers, can decrypt the scans without it.
 

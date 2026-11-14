@@ -242,3 +242,41 @@ func TestSwappedBlobsDoNotDecrypt(t *testing.T) {
 		t.Errorf("a moved blob must fail to decrypt, got %v", err)
 	}
 }
+
+func TestChangePassphraseRewrapsOnly(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "mitch.db")
+	created, err := Create(context.Background(), path, []byte("old passphrase 123"), fastParams(t))
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+	started := time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC)
+	scanID, err := created.SaveScan(context.Background(), started, started, []byte(`{"kept":true}`))
+	if err != nil {
+		t.Fatalf("SaveScan failed: %v", err)
+	}
+
+	err = created.ChangePassphrase(context.Background(), []byte("short"), fastParams(t))
+	if err == nil || !strings.Contains(err.Error(), "at least 12") {
+		t.Errorf("expected a too-short error, got %v", err)
+	}
+
+	err = created.ChangePassphrase(context.Background(), []byte("new passphrase 456"), fastParams(t))
+	if err != nil {
+		t.Fatalf("ChangePassphrase failed: %v", err)
+	}
+	_ = created.Close()
+
+	_, err = Open(context.Background(), path, []byte("old passphrase 123"))
+	if !errors.Is(err, encryption.ErrWrongPassphrase) {
+		t.Errorf("the old passphrase must stop working, got %v", err)
+	}
+	reopened, err := Open(context.Background(), path, []byte("new passphrase 456"))
+	if err != nil {
+		t.Fatalf("the new passphrase did not unlock: %v", err)
+	}
+	defer func() { _ = reopened.Close() }()
+	content, err := reopened.LoadScan(context.Background(), scanID)
+	if err != nil || string(content) != `{"kept":true}` {
+		t.Errorf("the saved scan did not survive: %q, %v", content, err)
+	}
+}

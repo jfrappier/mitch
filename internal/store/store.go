@@ -249,6 +249,41 @@ func readSettings(ctx context.Context, db *sql.DB, path string) (map[string]stri
 	return settings, nil
 }
 
+// ChangePassphrase protects the database with a new passphrase.
+//
+// Only the data key is wrapped again, with a fresh salt and kdfParams. The
+// saved scans stay encrypted with the same data key, so nothing else is
+// rewritten. The wrapped key is replaced in one SQL statement, so the
+// database holds either the old wrapped key or the new one, never a mix.
+func (s *Store) ChangePassphrase(ctx context.Context, newPassphrase []byte, kdfParams encryption.KDFParams) error {
+	err := encryption.CheckPassphrase(newPassphrase)
+	if err != nil {
+		return err
+	}
+
+	wrappedKey, err := encryption.WrapDataKey(newPassphrase, s.dataKey, kdfParams)
+	if err != nil {
+		return err
+	}
+	wrappedKeyJSON, err := json.Marshal(wrappedKey)
+	if err != nil {
+		return fmt.Errorf("encoding the wrapped data key failed: %w", err)
+	}
+
+	result, err := s.db.ExecContext(ctx, `UPDATE settings SET value = ? WHERE name = ?`, string(wrappedKeyJSON), settingWrappedKey)
+	if err != nil {
+		return fmt.Errorf("saving the new wrapped data key to %s failed: %w", s.path, err)
+	}
+	changedRows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("checking the passphrase change in %s failed: %w", s.path, err)
+	}
+	if changedRows != 1 {
+		return fmt.Errorf("the passphrase change updated %d rows in %s instead of 1; the database may be damaged", changedRows, s.path)
+	}
+	return nil
+}
+
 // Path returns the database file path.
 func (s *Store) Path() string {
 	return s.path
