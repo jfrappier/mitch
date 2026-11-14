@@ -46,7 +46,7 @@ func runPassphrase(runContext runContext, arguments []string) int {
 	defer closeStore(runContext, opened)
 
 	// Step 2: get the new passphrase.
-	replacement, err := readReplacementPassphrase(runContext, *newPassphraseFile)
+	replacement, err := readReplacementPassphrase(runContext, *newPassphraseFile, *databaseFlags.allowInsecurePassphraseFile)
 	if err != nil {
 		passphraseLogger.Error("cannot read the new passphrase", logging.FieldOperation, "change_passphrase", logging.FieldError, err.Error())
 		return exitcode.GeneralError
