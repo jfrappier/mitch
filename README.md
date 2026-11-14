@@ -2,46 +2,91 @@
   <img src="docs/assets/logo.png" alt="Mitch the bulldog" width="200">
 </p>
 
-# Mitch
+<h1 align="center">Mitch</h1>
 
-Mitch is a read-only inventory and audit tool for HashiCorp Vault.
+<p align="center">
+  <strong>A read-only inventory and audit tool for HashiCorp Vault.</strong><br>
+  <a href="https://github.com/jfrappier/mitch/actions/workflows/ci.yml"><img src="https://github.com/jfrappier/mitch/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status"></a>
+</p>
 
-People often ask how to run reports in Vault, but Vault is not a CMDB or an inventory tool. Mitch scans a Vault cluster and stores what it finds, so you can answer questions like "how many secrets do we have?", "which plugins were installed by hand?", and "which policies are too broad?"
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="docs/README.md">Documentation</a> ·
+  <a href="docs/data-security.md">How your data is protected</a> ·
+  <a href="docs/design-decisions.md">Design decisions</a>
+</p>
 
-> **Status:** early development. `mitch scan` works today: it inventories Vault, including secret counts for KV mounts, and saves each scan encrypted (`mitch init`, `mitch history`, `mitch export`), summarizes a scan (`mitch report`), shows what changed between two scans (`mitch diff`), writes Terraform to manage the config (`mitch terraform`), and shows all of it in a local web page (`mitch serve`). Policy findings are not built yet. See [Scanning Vault](docs/scanning.md), [Saving scans](docs/saving-scans.md), [Reports](docs/reports.md), [Comparing scans](docs/comparing-scans.md), [Generating Terraform](docs/terraform.md) and [The web UI](docs/web-ui.md).
+---
 
-## What Mitch will do
+People often ask how to run reports in Vault, but Vault is not a CMDB or an inventory tool. Mitch scans a Vault cluster and saves what it finds, encrypted, so you can answer questions like "how many secrets do we have?", "which plugins were installed by hand?" and "what changed since last week?"
 
-- **Scan** secrets engine and auth method mounts, the paths under them, plugins (built-in vs manually registered), server configuration, namespaces (Enterprise), and ACL policies.
-- **Report** on counts, changes since the last scan, and drift between Vault and your git repository.
-- **Generate Terraform** so Vault configuration can be managed as code.
-- **Flag overly permissive policies** and suggest tighter ones.
+> [!NOTE]
+> **Early development.** Everything below works today except policy findings, which are not built yet. There is no published release or image yet; build from this repository.
+
+## What Mitch does
+
+| | |
+| --- | --- |
+| **Scan** | Secrets engines, auth methods, plugins (built in or registered by hand), server configuration, audit devices, namespaces (Enterprise), ACL policies, and KV secret counts. |
+| **Report** | A summary of one scan, in the terminal as Markdown, or saved as Markdown or JSON. |
+| **Diff** | What changed between two saved scans. |
+| **Terraform** | Writes Terraform, with import blocks, so Terraform can adopt your existing Vault setup. |
+| **Web UI** | Browse scans, reports and changes in a local, read-only web page. |
+
+## How it works
+
+```mermaid
+flowchart LR
+    vault[("Vault")]
+    scan["mitch scan"]
+    db[("mitch.db<br>encrypted scans")]
+    report["mitch report"]
+    diff["mitch diff"]
+    tf["mitch terraform"]
+    serve["mitch serve"]
+    export["mitch export"]
+
+    vault -- "read-only API calls" --> scan
+    scan -- "AES-256-GCM" --> db
+    db --> report
+    db --> diff
+    db --> tf
+    db --> serve
+    db --> export
+```
+
+Only `mitch scan` talks to Vault. Every other command reads the saved scans, so you can report, compare and generate Terraform without a Vault token.
+
+## Quick start
+
+You need a Vault token with Mitch's policy; [Scanning Vault](docs/scanning.md) shows how to create it.
+
+```shell
+go build -o mitch ./cmd/mitch      # or: docker build -t mitch .  (see docs/docker.md)
+
+./mitch init                        # create the encrypted database; asks for a passphrase
+export VAULT_ADDR=https://vault.example.com:8200
+export VAULT_TOKEN=...              # a token with Mitch's policy
+./mitch scan                        # scan Vault and save the result
+./mitch report                      # summarize the newest scan
+./mitch serve                       # browse it in your browser
+```
 
 ## Design principles
 
-- **Read-only.** Mitch never writes to Vault and never reads secret values. It lists paths and reads metadata only.
-- **One binary, nothing to install.** Mitch is a single Go binary for macOS, Linux and Windows, plus a small Docker image. No runtime or package manager required.
-- **Encrypted at rest.** Scan results are stored in a local SQLite database, with sensitive fields encrypted using a key derived from your passphrase.
-- **Least privilege.** Mitch publishes the exact Vault policies it needs. Endpoints that require `sudo` are skipped unless you opt in with `--sudo`.
+- **Read-only.** Mitch never writes to Vault and never reads secret values. KV secrets are counted, never named.
+- **One binary, nothing to install.** A single Go binary for macOS, Linux and Windows, plus a small Docker image.
+- **Encrypted at rest.** Scans are encrypted with a key that only your passphrase unlocks. See [How Mitch protects your data](docs/data-security.md).
+- **Least privilege.** Mitch prints the exact Vault policy it needs. Endpoints that need `sudo` are skipped unless you opt in with `--sudo`.
+- **Fails loudly.** Every skipped check is logged with the reason and the next step, and changes the exit code.
 
 ## Documentation
 
-- [Scanning Vault](docs/scanning.md): policy setup, flags, and output
-- [Saving scans](docs/saving-scans.md): the encrypted database and passphrase
-- [Reports](docs/reports.md): a summary of one scan, in Markdown or JSON
-- [Comparing scans](docs/comparing-scans.md): what changed between two scans
-- [Generating Terraform](docs/terraform.md): import your Vault config into Terraform
-- [The web UI](docs/web-ui.md): browse scans, reports and changes in your browser
-- [Running in Docker](docs/docker.md): build the image and keep the database on a volume
-- [Design decisions](docs/design-decisions.md) and what each means for you
-- [How Mitch protects your data](docs/data-security.md)
-- [Logging](docs/logging.md)
-- [Exit codes](docs/exit-codes.md)
-- [Developing Mitch](docs/development.md)
+Start at the [documentation index](docs/README.md).
 
 ## Supported Vault versions
 
-Vault 1.19 and later, including 2.x.
+Vault 1.19 and later, including 2.x. CI tests against 1.19.5 and 2.2.2.
 
 ## License
 
