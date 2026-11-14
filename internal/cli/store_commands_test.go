@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -110,6 +111,62 @@ func TestPassphraseFileWinsAndTrimsOneLineBreak(t *testing.T) {
 	opened, err := store.Open(context.Background(), path, []byte(testPassphrase))
 	if err != nil {
 		t.Fatalf("the passphrase from the file did not unlock the database: %v", err)
+	}
+	_ = opened.Close()
+}
+
+// writeOpenPassphraseFile writes the test passphrase to a file that other
+// users can read (0644), and sets those permissions explicitly in case the
+// umask removed them.
+func writeOpenPassphraseFile(t *testing.T) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not use Unix permission bits, so Mitch does not check them there")
+	}
+	passphraseFile := filepath.Join(t.TempDir(), "passphrase")
+	err := os.WriteFile(passphraseFile, []byte(testPassphrase+"\n"), 0o600)
+	if err != nil {
+		t.Fatalf("writing the passphrase file failed: %v", err)
+	}
+	err = os.Chmod(passphraseFile, 0o644) //nolint:gosec // the test needs a file other users can read
+	if err != nil {
+		t.Fatalf("chmod failed: %v", err)
+	}
+	return passphraseFile
+}
+
+func TestPassphraseFileReadableByOthersIsRefused(t *testing.T) {
+	path := testDatabase(t)
+	passphraseFile := writeOpenPassphraseFile(t)
+
+	exitCode, _, stderr := runForTest("init", "--passphrase-file", passphraseFile)
+	if exitCode != exitcode.GeneralError {
+		t.Errorf("exit %d, want %d", exitCode, exitcode.GeneralError)
+	}
+	for _, expected := range []string{"refusing to use the passphrase file", "chmod 600 " + passphraseFile, "--allow-insecure-passphrase-file"} {
+		if !strings.Contains(stderr, expected) {
+			t.Errorf("stderr is missing %q:\n%s", expected, stderr)
+		}
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Error("a refused init must not create the database")
+	}
+}
+
+func TestAllowInsecurePassphraseFileWarnsAndContinues(t *testing.T) {
+	path := testDatabase(t)
+	passphraseFile := writeOpenPassphraseFile(t)
+
+	exitCode, _, stderr := runForTest("init", "--passphrase-file", passphraseFile, "--allow-insecure-passphrase-file")
+	if exitCode != exitcode.Success {
+		t.Fatalf("init failed: exit %d\nstderr: %s", exitCode, stderr)
+	}
+	if !strings.Contains(stderr, "using a passphrase file that other users can read") || !strings.Contains(stderr, "level=WARN") {
+		t.Errorf("expected a warning about the open file:\n%s", stderr)
+	}
+	opened, err := store.Open(context.Background(), path, []byte(testPassphrase))
+	if err != nil {
+		t.Fatalf("the database did not open with the file's passphrase: %v", err)
 	}
 	_ = opened.Close()
 }
