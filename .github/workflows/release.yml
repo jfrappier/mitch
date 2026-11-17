@@ -1,0 +1,392 @@
+# Release pipeline for Mitch.
+#
+# Pushing a version tag such as v0.1.0 publishes a release:
+#   binaries    - mitch for macOS, Linux and Windows, plus a SHA256SUMS file
+#   run-binary  - runs the arm64 binaries on real arm64 machines (macOS and Linux)
+#   image       - a multi-platform image (linux/amd64 + linux/arm64) pushed to
+#                 ghcr.io/jfrappier/mitch, with a signed build provenance attestation
+#   run-image   - pulls the pushed image on amd64 and arm64 machines and runs it
+#   release     - attests the binaries and creates the GitHub Release with them
+#
+# The release is created last, so it only exists when every step above passed.
+#
+# Every pull request runs the same build and run checks, but pushes nothing:
+# no image is pushed, nothing is attested and no release is created. That way
+# a broken release pipeline shows up before anyone tags a version.
+#
+# Any failing step fails the run.
+#
+# Docs used:
+#   Publishing images to GHCR: https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images
+#   GitHub CLI in workflows:   https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-github-cli
+#   Tag filter patterns:       https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#filter-pattern-cheat-sheet
+#   Hosted runner labels:      https://docs.github.com/en/actions/reference/runners/github-hosted-runners
+name: release
+
+on:
+  push:
+    # Only plain versions such as v0.1.0 or v1.12.3. A tag like v0.1.0-rc1
+    # does not match, so it never publishes a release or moves "latest".
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  pull_request:
+
+# Every job starts with read-only access. Jobs that publish ask for more.
+permissions:
+  contents: read
+
+# Never run two releases of the same tag at once, and never cancel one halfway.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # GHCR image name. Must be lowercase.
+  IMAGE: ghcr.io/jfrappier/mitch
+
+jobs:
+  # Decides the version string once, so every binary and the image agree.
+  # A tag push uses the tag (v0.1.0). A pull request uses "ci", which is
+  # never a real version.
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.pick.outputs.version }}
+      build_date: ${{ steps.pick.outputs.build_date }}
+    steps:
+      - name: Pick the version
+        id: pick
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "push" ]; then
+            version="$REF_NAME"
+          else
+            version="ci"
+          fi
+          build_date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "version=${version}"
+          echo "build_date=${build_date}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "build_date=${build_date}" >> "$GITHUB_OUTPUT"
+
+  binaries:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      # Same platforms as the "build" job in ci.yml. CGO_ENABLED=0 makes
+      # static binaries, so cross-compiling needs no other tools.
+      - name: Build every platform
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          BUILD_DATE: ${{ needs.version.outputs.build_date }}
+          COMMIT: ${{ github.sha }}
+          CGO_ENABLED: "0"
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          ldflags="-X github.com/jfrappier/mitch/internal/version.Version=${VERSION}"
+          ldflags="${ldflags} -X github.com/jfrappier/mitch/internal/version.Commit=${COMMIT}"
+          ldflags="${ldflags} -X github.com/jfrappier/mitch/internal/version.BuildDate=${BUILD_DATE}"
+
+          for platform in darwin/arm64 darwin/amd64 linux/arm64 linux/amd64 windows/amd64; do
+            goos="${platform%/*}"
+            goarch="${platform#*/}"
+            name="mitch-${goos}-${goarch}"
+            if [ "$goos" = "windows" ]; then
+              name="${name}.exe"
+            fi
+            echo "building dist/${name}"
+            GOOS="$goos" GOARCH="$goarch" go build -trimpath -ldflags "$ldflags" -o "dist/${name}" ./cmd/mitch
+          done
+          ls -l dist/
+
+      # This runner is linux/amd64, so it can run that binary directly.
+      - name: Check the linux/amd64 binary reports the right version
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          output="$(./dist/mitch-linux-amd64 version)"
+          echo "$output"
+          if [[ "$output" != "mitch ${VERSION} (commit ${COMMIT}"* ]]; then
+            echo "mitch version did not show version ${VERSION} and commit ${COMMIT}"
+            exit 1
+          fi
+
+      # One line per binary: "<sha256>  <file name>". Users check a download
+      # with "shasum -a 256 -c" (macOS) or "sha256sum -c" (Linux).
+      - name: Write SHA256SUMS
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          sha256sum mitch-* > SHA256SUMS
+          cat SHA256SUMS
+          sha256sum --check --strict SHA256SUMS
+
+      - name: Keep the binaries for the next jobs
+        uses: actions/upload-artifact@v7
+        with:
+          name: binaries
+          path: dist/
+          if-no-files-found: error
+
+  # Runs the arm64 binaries on real arm64 hardware, since the build runner
+  # can only run the amd64 one. macos-latest is Apple Silicon.
+  run-binary:
+    needs: [version, binaries]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: macos-latest, file: mitch-darwin-arm64, expected_arch: arm64 }
+          - { runner: ubuntu-24.04-arm, file: mitch-linux-arm64, expected_arch: aarch64 }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: binaries
+          path: dist
+
+      - name: Check this runner is really ${{ matrix.expected_arch }}
+        env:
+          EXPECTED_ARCH: ${{ matrix.expected_arch }}
+        run: |
+          set -euo pipefail
+          arch="$(uname -m)"
+          echo "runner architecture: ${arch}"
+          if [ "$arch" != "$EXPECTED_ARCH" ]; then
+            echo "expected ${EXPECTED_ARCH}, so this job would not test what it claims to"
+            exit 1
+          fi
+
+      - name: Check the checksum, then run ${{ matrix.file }}
+        working-directory: dist
+        env:
+          FILE: ${{ matrix.file }}
+          VERSION: ${{ needs.version.outputs.version }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # The same check users run: shasum on macOS, sha256sum on Linux.
+          if [ "$(uname -s)" = "Darwin" ]; then
+            grep " ${FILE}\$" SHA256SUMS | shasum -a 256 --check
+          else
+            grep " ${FILE}\$" SHA256SUMS | sha256sum --check --strict
+          fi
+          chmod +x "$FILE"
+          output="$(./"$FILE" version)"
+          echo "$output"
+          if [[ "$output" != "mitch ${VERSION} (commit ${COMMIT}"* ]]; then
+            echo "mitch version did not show version ${VERSION} and commit ${COMMIT}"
+            exit 1
+          fi
+
+  image:
+    needs: version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Push to ghcr.io with GITHUB_TOKEN.
+      packages: write
+      # Sign and store the build provenance attestation.
+      id-token: write
+      attestations: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # A builder that can make multi-platform images.
+      # The Dockerfile cross-compiles Go (FROM --platform=$BUILDPLATFORM) and
+      # the final stage only copies files, so no CPU emulation (QEMU) is needed.
+      # Docs: https://docs.docker.com/build/building/multi-platform/#cross-compilation
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to ghcr.io
+        if: github.event_name == 'push'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # For tag v1.2.3 this makes the tags 1.2.3, 1.2 and latest, plus the
+      # standard OCI labels, including org.opencontainers.image.source, which
+      # links the package to this repository.
+      # Docs: https://github.com/docker/metadata-action#semver
+      - name: Work out image tags and labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=ref,event=pr
+
+      # On a pull request this builds both platforms and pushes nothing.
+      - name: Build both platforms, and push on a tag
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name == 'push' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ needs.version.outputs.version }}
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ needs.version.outputs.build_date }}
+
+      - name: Show what was pushed
+        if: github.event_name == 'push'
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          echo "pushed ${IMAGE}@${DIGEST}"
+          # Lists every platform in the pushed image. Fails if it is missing.
+          docker buildx imagetools inspect "${IMAGE}@${DIGEST}"
+
+      # Signed provenance: proves this image was built by this workflow from
+      # this commit. Users check it with "gh attestation verify".
+      # Storage records only work for organization-owned repositories, so
+      # that part is switched off.
+      # Docs: https://github.com/actions/attest
+      - name: Attest the image
+        if: github.event_name == 'push'
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+
+  # Runs the image on amd64 and arm64. On a tag it pulls the exact image that
+  # was pushed. On a pull request it builds the image locally for this runner.
+  run-image:
+    needs: [version, image]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-24.04, expected_arch: amd64 }
+          - { runner: ubuntu-24.04-arm, expected_arch: arm64 }
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      # Pull from ghcr.io. A new package is private until made public.
+      packages: read
+    steps:
+      - uses: actions/checkout@v7
+        if: github.event_name != 'push'
+
+      - name: Build the image for this runner (pull request)
+        if: github.event_name != 'push'
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          docker build --build-arg VERSION="$VERSION" --build-arg COMMIT="$COMMIT" --tag mitch:check .
+          echo "IMAGE_REF=mitch:check" >> "$GITHUB_ENV"
+
+      - name: Log in to ghcr.io (tag)
+        if: github.event_name == 'push'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull the pushed image (tag)
+        if: github.event_name == 'push'
+        env:
+          DIGEST: ${{ needs.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          docker pull "${IMAGE}@${DIGEST}"
+          echo "IMAGE_REF=${IMAGE}@${DIGEST}" >> "$GITHUB_ENV"
+
+      - name: Check the image architecture, user and version
+        env:
+          EXPECTED_ARCH: ${{ matrix.expected_arch }}
+          VERSION: ${{ needs.version.outputs.version }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          arch="$(docker image inspect --format '{{.Architecture}}' "$IMAGE_REF")"
+          echo "image architecture: ${arch}"
+          if [ "$arch" != "$EXPECTED_ARCH" ]; then
+            echo "expected a ${EXPECTED_ARCH} image on this runner"
+            exit 1
+          fi
+
+          user="$(docker image inspect --format '{{.Config.User}}' "$IMAGE_REF")"
+          echo "image user: ${user}"
+          if [ "$user" != "nonroot:nonroot" ]; then
+            echo "the image must run as nonroot:nonroot"
+            exit 1
+          fi
+
+          output="$(docker run --rm "$IMAGE_REF" version)"
+          echo "$output"
+          if [[ "$output" != "mitch ${VERSION} (commit ${COMMIT}"* ]]; then
+            echo "mitch version did not show version ${VERSION} and commit ${COMMIT}"
+            exit 1
+          fi
+
+  release:
+    if: github.event_name == 'push'
+    needs: [version, binaries, run-binary, image, run-image]
+    runs-on: ubuntu-latest
+    permissions:
+      # Create the release and upload files to it.
+      contents: write
+      # Sign and store the binaries' build provenance attestation.
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: binaries
+          path: dist
+
+      - name: Check the binaries still match SHA256SUMS
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          ls -l
+          sha256sum --check --strict SHA256SUMS
+
+      # Users check a binary with: gh attestation verify <file> --repo jfrappier/mitch
+      - name: Attest the binaries
+        uses: actions/attest@v4
+        with:
+          subject-path: "dist/mitch-*"
+
+      # --verify-tag stops gh from creating a tag if the pushed tag is missing.
+      # --generate-notes writes the notes from the merged pull requests.
+      # Docs: https://cli.github.com/manual/gh_release_create
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" dist/mitch-* dist/SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "Mitch ${TAG}" \
+            --generate-notes
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY"

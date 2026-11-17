@@ -1,6 +1,6 @@
 ---
 title: Exit codes
-weight: 13
+weight: 14
 ---
 
 Every Mitch command exits with one of these codes, so scripts and CI jobs can react to a specific outcome. The source of truth is [`internal/exitcode/exitcode.go`](https://github.com/jfrappier/mitch/blob/main/internal/exitcode/exitcode.go).

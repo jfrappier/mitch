@@ -21,7 +21,7 @@
 People often ask how to run reports in Vault, but Vault is not a CMDB or an inventory tool. Mitch scans a Vault cluster and saves what it finds, encrypted, so you can answer questions like "how many secrets do we have?", "which plugins were installed by hand?" and "what changed since last week?"
 
 > [!NOTE]
-> **Early development.** Everything below works today. There is no published release or image yet; build from this repository.
+> **Early development.** Everything below works today. Install a [release binary or the Docker image](docs/installing.md).
 
 ## What Mitch does
 
@@ -64,14 +64,14 @@ Only `mitch scan` talks to Vault. Every other command reads the saved scans, so 
 You need a Vault token with Mitch's policy; [Scanning Vault](docs/scanning.md) shows how to create it.
 
 ```shell
-go build -o mitch ./cmd/mitch      # or: docker build -t mitch .  (see docs/docker.md)
+# Install first: see docs/installing.md (release binaries and ghcr.io/jfrappier/mitch)
 
-./mitch init                        # create the encrypted database; asks for a passphrase
+mitch init                          # create the encrypted database; asks for a passphrase
 export VAULT_ADDR=https://vault.example.com:8200
 export VAULT_TOKEN=...              # a token with Mitch's policy
-./mitch scan                        # scan Vault and save the result
-./mitch report                      # summarize the newest scan
-./mitch serve                       # browse it in your browser
+mitch scan                          # scan Vault and save the result
+mitch report                        # summarize the newest scan
+mitch serve                         # browse it in your browser
 ```
 
 ## Design principles

@@ -1,13 +1,22 @@
 ---
 title: Running Mitch in Docker
-weight: 9
+weight: 10
 ---
 
 The Mitch image is small and locked down. It is built on [distroless static (Debian 13)](https://github.com/GoogleContainerTools/distroless): it has no shell and no package manager, it has the CA certificates needed for TLS to Vault, and it runs as the `nonroot` user. The image works on Apple Silicon (arm64) and Intel (amd64).
 
-> **Not built yet:** a published image. For now, build it from this repository.
+## 1. Get the image
 
-## 1. Build the image
+Pull the published image from GitHub Container Registry. Docker picks the arm64 or amd64 image for your machine.
+
+```shell
+docker pull ghcr.io/jfrappier/mitch:latest
+docker tag ghcr.io/jfrappier/mitch:latest mitch
+```
+
+The second line gives the image the short name `mitch`, which the commands below use. See [Installing Mitch](installing.md#pull-the-docker-image) for the other tags and how to check where the image came from.
+
+Or build it yourself from this repository:
 
 ```shell
 docker build -t mitch .

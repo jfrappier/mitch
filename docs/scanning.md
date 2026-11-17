@@ -1,6 +1,6 @@
 ---
 title: Scanning Vault
-weight: 2
+weight: 3
 ---
 
 `mitch scan` reads a Vault cluster and saves an encrypted inventory of what it found. It never writes to Vault and never reads secret values.

@@ -1,6 +1,6 @@
 ---
 title: Policy findings
-weight: 4
+weight: 5
 ---
 
 Mitch checks every ACL policy in a saved scan for grants that are broader than they look, and for rules that do not do what they seem to. Findings show up in `mitch report`, in the JSON report, and in the `mitch serve` report page. `mitch report --fail-on` turns them into an exit code for CI.
