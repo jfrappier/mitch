@@ -1,6 +1,7 @@
-[Mitch docs](README.md) › Design decisions
-
-# Design decisions
+---
+title: Design decisions
+weight: 10
+---
 
 Each decision below says what was chosen, why, and what it means for you as a user.
 
@@ -21,7 +22,7 @@ Each decision below says what was chosen, why, and what it means for you as a us
 
 ## SQLite storage, encrypted by Mitch
 
-**Decision:** Scan results are stored in a local SQLite file. Each scan is encrypted as a whole by Mitch, with a key derived from your passphrase; only ids and timestamps stay in the clear. `mitch scan` saves by default and unlocks the database before contacting Vault. See [data-security.md](data-security.md).
+**Decision:** Scan results are stored in a local SQLite file. Each scan is encrypted as a whole by Mitch, with a key derived from your passphrase; only ids and timestamps stay in the clear. `mitch scan` saves by default and unlocks the database before contacting Vault. See [How Mitch protects your data](data-security.md).
 **Impact:** A stolen database file or backup is unreadable without the passphrase. If you lose the passphrase, your scan history cannot be recovered. Run `mitch init` once before your first scan, or use `--no-save` for a one-off JSON inventory.
 
 ## Diffs compare saved scans only
@@ -42,7 +43,7 @@ Each decision below says what was chosen, why, and what it means for you as a us
 
 ## Policy findings parsed the way Vault parses them
 
-**Decision:** Mitch parses ACL policies with HCL v1, the library and version Vault itself uses, and applies Vault's path priority rules. HCL v2 is kept for later, for comparing Terraform in a git repository with the live Vault. Findings are computed from the saved scan each time, never stored. See [findings.md](findings.md).
+**Decision:** Mitch parses ACL policies with HCL v1, the library and version Vault itself uses, and applies Vault's path priority rules. HCL v2 is kept for later, for comparing Terraform in a git repository with the live Vault. Findings are computed from the saved scan each time, never stored. See [Policy findings](findings.md).
 **Impact:** A finding describes what Vault actually enforces, including old `policy = "write"` shorthand and JSON policies. Upgrading Mitch improves findings on scans you already saved.
 
 **Decision:** Findings have four severities: critical, high, medium, low. They only change the exit code when you ask, with `mitch report --fail-on SEVERITY` (exit code 4).
@@ -59,7 +60,7 @@ Each decision below says what was chosen, why, and what it means for you as a us
 **Impact:** Run it once, in CI, or on a schedule with cron or the tool you already use.
 
 **Decision:** `mitch serve` unlocks the database in the terminal, the same way as every other command, and prints a link with a random access token that is new each run. Pages need the token.
-**Impact:** The passphrase never goes through the browser. Other users and web pages on the same machine can reach `127.0.0.1` but cannot read your scans. Reopen the printed link after each restart. See [web-ui.md](web-ui.md).
+**Impact:** The passphrase never goes through the browser. Other users and web pages on the same machine can reach `127.0.0.1` but cannot read your scans. Reopen the printed link after each restart. See [The web UI](web-ui.md).
 
 ## No AI in v1
 

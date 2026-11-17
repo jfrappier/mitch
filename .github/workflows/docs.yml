@@ -1,0 +1,84 @@
+# Documentation site for Mitch.
+#
+# Builds the site in website/ (Hugo with the Hextra theme) from the pages in
+# docs/. Every pull request builds it, so a broken page fails the check.
+# A push to main also publishes it to GitHub Pages.
+#
+# GitHub Pages with a custom workflow:
+# https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages
+#
+# Any failing step fails the run.
+name: docs
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Only one publish at a time, and never cancel a publish halfway.
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Hugo extended is required by Hextra. Release list:
+  # https://github.com/gohugoio/hugo/releases
+  HUGO_VERSION: "0.169.0"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Hugo modules (the Hextra theme) are fetched with Go.
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Install Hugo ${{ env.HUGO_VERSION }} extended, checksum verified
+        run: |
+          set -euo pipefail
+          base="https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}"
+          archive="hugo_extended_${HUGO_VERSION}_linux-amd64.tar.gz"
+          checksums="hugo_${HUGO_VERSION}_checksums.txt"
+          cd "$RUNNER_TEMP"
+          curl --fail --show-error --location --output "$archive" "$base/$archive"
+          curl --fail --show-error --location --output "$checksums" "$base/$checksums"
+          # Fails if the archive does not match the published checksum.
+          grep " ${archive}\$" "$checksums" | sha256sum --check --strict -
+          tar -xzf "$archive" hugo
+          sudo install -m 0755 hugo /usr/local/bin/hugo
+          hugo version
+
+      - name: Build the site
+        working-directory: website
+        run: |
+          set -euo pipefail
+          # Fail on any warning, such as a broken page reference.
+          hugo --minify --panicOnWarning --baseURL "https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
+
+      - name: Package the site for GitHub Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: website/public
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    # The minimum permissions GitHub Pages needs to publish.
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,8 +1,9 @@
-[Mitch docs](README.md) › Saving scans
+---
+title: Saving scans
+weight: 1
+---
 
-# Saving scans
-
-`mitch scan` saves each scan, encrypted, in a local database. Later commands read from it, so you can look back at earlier scans. How the data is protected is described in [data-security.md](data-security.md).
+`mitch scan` saves each scan, encrypted, in a local database. Later commands read from it, so you can look back at earlier scans. How the data is protected is described in [How Mitch protects your data](data-security.md).
 
 ## 1. Choose a passphrase
 
@@ -40,7 +41,7 @@ mitch scan
 
 The scan is encrypted and saved, and its id is printed, for example `4c245cda40efc84d`. Mitch unlocks the database before contacting Vault, so a wrong passphrase or missing database fails right away.
 
-To print the inventory as JSON without saving it, use `mitch scan --no-save`. That needs no database or passphrase. See [scanning.md](scanning.md) for the scan itself.
+To print the inventory as JSON without saving it, use `mitch scan --no-save`. That needs no database or passphrase. See [Scanning Vault](scanning.md) for the scan itself.
 
 ## 4. List and export saved scans
 
@@ -73,7 +74,7 @@ For scripts, give the current passphrase the usual way and the new one with `MIT
 MITCH_PASSPHRASE='<current>' MITCH_NEW_PASSPHRASE='<new>' mitch passphrase
 ```
 
-Afterwards, update `MITCH_PASSPHRASE`, any passphrase files, and your password manager. The old passphrase no longer opens this database, but it still opens backups made before the change. See [data-security.md](data-security.md#changing-the-passphrase).
+Afterwards, update `MITCH_PASSPHRASE`, any passphrase files, and your password manager. The old passphrase no longer opens this database, but it still opens backups made before the change. See [How Mitch protects your data](data-security.md#changing-the-passphrase).
 
 ## Flags
 
@@ -101,7 +102,3 @@ These work on `init`, `scan`, `history`, `export`, `report`, `diff` and `passphr
 | `the two passphrases do not match` | Run `mitch init` again. Nothing was created. |
 | `refusing to use the passphrase file: ... has permissions 0644` | Run the `chmod 600` command in the message. In CI or a container where you can't, pass `--allow-insecure-passphrase-file`. |
 | `... has permissions 0644; other users on this machine can read it` (a warning about the database) | Run the `chmod 600` command in the message. |
-
----
-
-**Next:** [Scanning Vault](scanning.md)

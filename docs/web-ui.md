@@ -1,6 +1,7 @@
-[Mitch docs](README.md) › The web UI
-
-# The web UI
+---
+title: The web UI
+weight: 7
+---
 
 `mitch serve` runs a small web page for browsing saved scans: the list of scans, the report for each one (the same as `mitch report`), and the changes between two scans (the same as `mitch diff`). It reads only the saved, encrypted scans. It never contacts Vault, never starts a scan, and never changes the database.
 
@@ -10,7 +11,7 @@
 mitch serve
 ```
 
-Mitch asks for the database passphrase (or reads `MITCH_PASSPHRASE` or `--passphrase-file`, see [saving-scans.md](saving-scans.md)), then prints a link:
+Mitch asks for the database passphrase (or reads `MITCH_PASSPHRASE` or `--passphrase-file`, see [Saving scans](saving-scans.md)), then prints a link:
 
 ```text
 Mitch web UI is running. Open this link (it holds this run's access token):
@@ -51,8 +52,8 @@ The printed link uses `127.0.0.1:8484`, which reaches the container through the 
 | Flag | Default | Meaning |
 | --- | --- | --- |
 | `--listen ADDRESS:PORT` | `127.0.0.1:8484` | Where to listen. Port `0` picks a free port, shown in the link. |
-| `--db PATH`, `--passphrase-file FILE` | | See [saving-scans.md](saving-scans.md). |
+| `--db PATH`, `--passphrase-file FILE` | | See [Saving scans](saving-scans.md). |
 
 If the port is in use, Mitch exits with an error; pick another with `--listen 127.0.0.1:8485`.
 
-The report page shows the same policy findings as `mitch report`. See [findings.md](findings.md).
+The report page shows the same policy findings as `mitch report`. See [Policy findings](findings.md).

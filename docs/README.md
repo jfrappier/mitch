@@ -1,8 +1,6 @@
-<p align="center">
-  <img src="assets/logo.png" alt="Mitch the bulldog" width="120">
-</p>
-
-<h1 align="center">Mitch documentation</h1>
+---
+title: Documentation
+---
 
 Mitch scans a HashiCorp Vault cluster, read-only, and saves an encrypted inventory you can report on, compare and turn into Terraform. Start with **Get started** in order; the rest you can read when you need it.
 

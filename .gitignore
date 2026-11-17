@@ -7,3 +7,8 @@
 *.db
 *.sqlite
 *.sqlite3
+
+# Hugo build output for the docs site (website/).
+website/public/
+website/resources/
+website/.hugo_build.lock

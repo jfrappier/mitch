@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="#quick-start">Quick start</a> ·
-  <a href="docs/README.md">Documentation</a> ·
+  <a href="https://jfrappier.github.io/mitch/">Documentation</a> ·
   <a href="docs/data-security.md">How your data is protected</a> ·
   <a href="docs/design-decisions.md">Design decisions</a>
 </p>

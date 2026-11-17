@@ -1,0 +1,94 @@
+# Mitch documentation site, built with Hugo and the Hextra theme.
+#
+# The pages themselves live in ../docs, so they stay readable on GitHub.
+# This folder only holds the site settings and the home page. Build it with:
+#
+#   cd website && hugo --minify
+#
+# Hugo: https://gohugo.io/documentation/
+# Hextra settings: https://imfing.github.io/hextra/docs/guide/configuration/
+
+baseURL: https://jfrappier.github.io/mitch/
+title: Mitch
+locale: en-us
+
+module:
+  hugoVersion:
+    # Hextra v0.13.0 needs Hugo 0.146.0 or later, extended edition.
+    min: "0.146.0"
+    extended: true
+  imports:
+    - path: github.com/imfing/hextra
+  # Pages come from ../docs. Hugo mounts let one folder appear inside
+  # another without copying: https://gohugo.io/configuration/module/#mounts
+  mounts:
+    - source: content
+      target: content
+    # docs/README.md is the docs index on GitHub; on the site it is the
+    # landing page of the Documentation section.
+    - source: ../docs/README.md
+      target: content/docs/_index.md
+    - source: ../docs
+      target: content/docs
+      files: ["! README.md", "! assets/**"]
+    - source: ../docs/assets
+      target: static/images
+
+markup:
+  goldmark:
+    renderer:
+      # The docs use a few HTML tags, such as <br> in diagrams.
+      unsafe: true
+    extensions:
+      typographer:
+        # Keep "--" and quotes as typed, so flags such as --fail-on are
+        # never turned into a dash.
+        disable: true
+
+menu:
+  main:
+    - name: Documentation
+      pageRef: /docs
+      weight: 1
+    - name: Search
+      weight: 2
+      params:
+        type: search
+    - name: GitHub
+      weight: 3
+      url: https://github.com/jfrappier/mitch
+      params:
+        icon: github
+
+params:
+  description: Read-only inventory, reports, policy findings and Terraform for HashiCorp Vault.
+  navbar:
+    displayTitle: true
+    displayLogo: true
+    logo:
+      path: images/logo.png
+      dark: images/logo.png
+      width: 32
+      height: 32
+  theme:
+    default: system
+    displayToggle: true
+  page:
+    width: wide
+  footer:
+    displayCopyright: false
+    displayPoweredBy: true
+  # Hextra downloads these scripts from jsDelivr at build time. Pinning the
+  # versions keeps every build the same; Hextra's default for Mermaid is
+  # "latest". Versions: https://www.npmjs.com/package/mermaid and
+  # https://www.npmjs.com/package/flexsearch
+  mermaid:
+    base: https://cdn.jsdelivr.net/npm/mermaid@12.3.0/dist
+  search:
+    enable: true
+    type: flexsearch
+    flexsearch:
+      version: "0.8.143"
+  editURL:
+    enable: true
+    base: https://github.com/jfrappier/mitch/edit/main/docs

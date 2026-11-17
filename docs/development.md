@@ -1,11 +1,13 @@
-[Mitch docs](README.md) › Developing Mitch
-
-# Developing Mitch
+---
+title: Developing Mitch
+weight: 13
+---
 
 ## Requirements
 
-- Go, at the version in [`go.mod`](../go.mod). With Go 1.21 or later installed, `go` downloads the right version automatically ([Go toolchains](https://go.dev/doc/toolchain)).
+- Go, at the version in [`go.mod`](https://github.com/jfrappier/mitch/blob/main/go.mod). With Go 1.21 or later installed, `go` downloads the right version automatically ([Go toolchains](https://go.dev/doc/toolchain)).
 - [golangci-lint](https://golangci-lint.run) v2.15.0 for linting.
+- [Hugo](https://gohugo.io/installation/) v0.169.0, extended edition, only to preview the documentation site.
 
 ## Common tasks
 
@@ -17,15 +19,16 @@
 | Check formatting | `gofmt -l .` (prints nothing when everything is formatted) |
 | Build for your machine | `go build -o mitch ./cmd/mitch` |
 | Build a static binary for another platform | `CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o mitch ./cmd/mitch` |
+| Preview the documentation site | `cd website && hugo server`, then open the address it prints |
 
-CI runs all of these on every pull request. See [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
+CI runs all of these on every pull request. See [`.github/workflows/ci.yml`](https://github.com/jfrappier/mitch/blob/main/.github/workflows/ci.yml) and [`.github/workflows/docs.yml`](https://github.com/jfrappier/mitch/blob/main/.github/workflows/docs.yml).
 
 ## Coding standards
 
 - **Readable over clever.** Write for someone who doesn't know Go: descriptive names, one step per line, no chained one-liners.
 - **Comment the why.** Every function says what it does. Every call to Vault names the endpoint.
 - **Fail loud and specific.** Errors say what failed, where (Vault path or file), the HTTP status, and what to do next. Never swallow an error.
-- **One log format.** Use the logger from `internal/logging` and its field constants. See [logging.md](logging.md).
+- **One log format.** Use the logger from `internal/logging` and its field constants. See [Logging](logging.md).
 - **No new dependencies without approval.** Each one must be pure Go, open source, maintained, and have a named fallback.
 - **Test everything.** New code comes with tests.
 
@@ -34,18 +37,18 @@ CI runs all of these on every pull request. See [`.github/workflows/ci.yml`](../
 | Package | Purpose | Fallback |
 | --- | --- | --- |
 | `github.com/hashicorp/vault/api` | Vault HTTP client | Standard library `net/http` |
-| `github.com/hashicorp/hcl/v2` | Parse policies and Terraform | None equivalent |
+| `github.com/hashicorp/hcl` (v1) | Parse ACL policies exactly as Vault does; Vault uses this library and version | None equivalent |
 | `modernc.org/sqlite` | SQLite driver, no cgo | `github.com/ncruces/go-sqlite3` |
 | `golang.org/x/crypto/argon2` | Passphrase key derivation | Standard library `crypto/pbkdf2` |
 | `golang.org/x/term` | Passphrase prompt that does not echo | `MITCH_PASSPHRASE` or `--passphrase-file` only |
 
-Each is added in the pull request that first needs it. In use today: all four.
+Each is added in the pull request that first needs it. In use today: all five. `github.com/hashicorp/hcl/v2` is approved for the planned `--repo` drift check, which reads Terraform files, and is not in use yet.
 
-`vault/api` brings in these indirect dependencies, all pure Go: `cenkalti/backoff`, `go-jose/go-jose`, HashiCorp's `errwrap`, `go-cleanhttp`, `go-multierror`, `go-retryablehttp`, `go-rootcerts`, `go-secure-stdlib`, `go-sockaddr` and `hcl` v1, `mitchellh/go-homedir`, `mitchellh/mapstructure`, `ryanuber/go-glob`, and `golang.org/x/{net,text,time}`. `modernc.org/sqlite` brings in `modernc.org/{libc,mathutil,memory}`, `dustin/go-humanize`, `google/uuid`, `mattn/go-isatty`, `ncruces/go-strftime`, `remyoudompheng/bigfft` and `golang.org/x/sys`, all pure Go. The exact versions are in [`go.mod`](../go.mod).
+`vault/api` brings in these indirect dependencies, all pure Go: `cenkalti/backoff`, `go-jose/go-jose`, HashiCorp's `errwrap`, `go-cleanhttp`, `go-multierror`, `go-retryablehttp`, `go-rootcerts`, `go-secure-stdlib`, `go-sockaddr`, `mitchellh/go-homedir`, `mitchellh/mapstructure`, `ryanuber/go-glob`, and `golang.org/x/{net,text,time}`. `modernc.org/sqlite` brings in `modernc.org/{libc,mathutil,memory}`, `dustin/go-humanize`, `google/uuid`, `mattn/go-isatty`, `ncruces/go-strftime`, `remyoudompheng/bigfft` and `golang.org/x/sys`, all pure Go. The exact versions are in [`go.mod`](https://github.com/jfrappier/mitch/blob/main/go.mod).
 
 `modernc.org/sqlite` must stay on the `modernc.org/libc` version its own `go.mod` names ([driver docs](https://pkg.go.dev/modernc.org/sqlite)). This is enforced, so nobody has to remember it:
 
-- [`.github/dependabot.yml`](../.github/dependabot.yml) tells Dependabot never to propose a `libc`-only update.
+- [`.github/dependabot.yml`](https://github.com/jfrappier/mitch/blob/main/.github/dependabot.yml) tells Dependabot never to propose a `libc`-only update.
 - The CI job `dependency-pins` fails if the two versions disagree, and prints the command to fix it.
 
 To upgrade, run `go get modernc.org/sqlite@<version> && go mod tidy`. That moves `libc` along with it.
@@ -79,3 +82,12 @@ docker rm -f vault-dev
 ```
 
 CI runs the same tests, including the Terraform one, against Vault 1.19.5 and 2.2.2. Never point these variables at a real cluster: the tests create policies and tokens.
+
+## Documentation site
+
+The pages in `docs/` are the documentation. The `website/` folder turns them into the site at https://jfrappier.github.io/mitch/ with [Hugo](https://gohugo.io/documentation/) and the [Hextra](https://imfing.github.io/hextra/) theme. Hextra is a Hugo module pinned in `website/go.mod`; it is not part of the Mitch binary.
+
+- **Write docs in `docs/` only.** Each page starts with front matter: `title` (shown as the page heading and in the sidebar) and `weight` (its place in the sidebar, lowest first). Do not add a `#` heading; the title is the heading.
+- **Link pages by file name**, for example `[Reports](reports.md)`. Links work both on GitHub and on the site. Link anything outside `docs/` with its full GitHub URL.
+- **No custom CSS or JavaScript.** The site uses Hextra as it ships, so theme upgrades stay simple.
+- **CI builds the site on every pull request** and fails on any Hugo warning. A push to `main` publishes it to GitHub Pages.

@@ -1,8 +1,9 @@
-[Mitch docs](README.md) › Exit codes
+---
+title: Exit codes
+weight: 12
+---
 
-# Exit codes
-
-Every Mitch command exits with one of these codes, so scripts and CI jobs can react to a specific outcome. The source of truth is [`internal/exitcode/exitcode.go`](../internal/exitcode/exitcode.go).
+Every Mitch command exits with one of these codes, so scripts and CI jobs can react to a specific outcome. The source of truth is [`internal/exitcode/exitcode.go`](https://github.com/jfrappier/mitch/blob/main/internal/exitcode/exitcode.go).
 
 | Code | Name | Meaning |
 | --- | --- | --- |
@@ -10,5 +11,5 @@ Every Mitch command exits with one of these codes, so scripts and CI jobs can re
 | 1 | GeneralError | The command failed. The log says what failed and why. |
 | 2 | UsageError | The command line was wrong: unknown command, unknown flag, or a bad flag value. |
 | 3 | NotImplemented | The command exists but is not built yet. No command returns it today; the number stays reserved. |
-| 4 | FindingsAboveThreshold | `mitch report --fail-on SEVERITY` found at least one policy finding at or above that severity. The report still prints. See [findings.md](findings.md). |
+| 4 | FindingsAboveThreshold | `mitch report --fail-on SEVERITY` found at least one policy finding at or above that severity. The report still prints. See [Policy findings](findings.md). |
 | 5 | PartialScan | The scan finished but skipped some checks, for example after an HTTP 403 from Vault. The log lists each skipped check. |
