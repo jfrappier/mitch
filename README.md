@@ -30,6 +30,7 @@ People often ask how to run reports in Vault, but Vault is not a CMDB or an inve
 | **Scan** | Secrets engines, auth methods, plugins (built in or registered by hand), server configuration, audit devices, namespaces (Enterprise), ACL policies, and KV secret counts. |
 | **Report** | A summary of one scan, in the terminal as Markdown, or saved as Markdown or JSON. |
 | **Findings** | Risky ACL policies, such as root-equivalent grants, write access to policies or mounts, and denies that do not block what they seem to. `--fail-on` fails a CI job on them. |
+| **Git drift** | `--repo` compares a scan with the Terraform in your git checkout: policies and mounts in Vault but not in git, in git but not in Vault, or different. |
 | **Diff** | What changed between two saved scans. |
 | **Terraform** | Writes Terraform, with import blocks, so Terraform can adopt your existing Vault setup. |
 | **Web UI** | Browse scans, reports and changes in a local, read-only web page. |

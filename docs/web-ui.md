@@ -1,6 +1,6 @@
 ---
 title: The web UI
-weight: 7
+weight: 8
 ---
 
 `mitch serve` runs a small web page for browsing saved scans: the list of scans, the report for each one (the same as `mitch report`), and the changes between two scans (the same as `mitch diff`). It reads only the saved, encrypted scans. It never contacts Vault, never starts a scan, and never changes the database.
@@ -52,8 +52,9 @@ The printed link uses `127.0.0.1:8484`, which reaches the container through the 
 | Flag | Default | Meaning |
 | --- | --- | --- |
 | `--listen ADDRESS:PORT` | `127.0.0.1:8484` | Where to listen. Port `0` picks a free port, shown in the link. |
+| `--repo PATH` | none | Compare every report with the Terraform in this local git checkout. Read once at startup; restart to pick up new commits. See [Comparing with git](git-drift.md). |
 | `--db PATH`, `--passphrase-file FILE` | | See [Saving scans](saving-scans.md). |
 
 If the port is in use, Mitch exits with an error; pick another with `--listen 127.0.0.1:8485`.
 
-The report page shows the same policy findings as `mitch report`. See [Policy findings](findings.md).
+The report page shows the same findings and git comparison as `mitch report`. See [Policy findings](findings.md) and [Comparing with git](git-drift.md).

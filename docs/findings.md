@@ -13,7 +13,7 @@ Findings are worked out from the saved scan each time you run a report. They are
 mitch report
 ```
 
-The **Policy findings** section lists each finding, most serious first, with its rule, namespace, policy, path, the line where the path block starts, what is wrong, and what to do about it. The summary counts findings by severity.
+The **Findings** section lists each finding, most serious first, with its rule, namespace, policy, path, the line where the path block starts, what is wrong, and what to do about it. The summary counts findings by severity.
 
 ## 2. Fail a CI job on findings
 
@@ -21,7 +21,7 @@ The **Policy findings** section lists each finding, most serious first, with its
 mitch report --fail-on high
 ```
 
-The report prints as usual. If any finding is at or above `high`, Mitch logs an error with the count and exits with code 4 (see [Exit codes](exit-codes.md)). Without `--fail-on`, findings never change the exit code.
+The report prints as usual. If any finding is at or above `high`, including the git findings from [Comparing with git](git-drift.md), Mitch logs an error with the count and exits with code 4 (see [Exit codes](exit-codes.md)). Without `--fail-on`, findings never change the exit code. The "no git repository" finding (MITCH-GIT-001) is never counted, so a CI job that cannot reach your Terraform repository can still pass.
 
 `--fail-on` takes `critical`, `high`, `medium` or `low`. Any other value fails with exit code 2 before the passphrase is read.
 
@@ -77,8 +77,7 @@ When more than one path block matches a request, Mitch picks the winner with Vau
 - **The `root` policy is skipped.** Vault does not return its text. The `default` policy is checked like any other, because people edit it.
 - **Sentinel policies** (Enterprise) are not read in v1.
 - **No folder-level suggestions.** Mitch does not suggest replacing a glob such as `secret/data/*` with the exact folders in use, because that needs folder names, and Mitch never stores them (see [Design decisions](design-decisions.md#kv-secrets-are-counted-not-named)).
-- **Not built yet:** the "no git repository" finding, which comes with the planned `--repo` option. See [Design decisions](design-decisions.md#git-as-the-source-of-truth).
 
 ## JSON fields
 
-In the JSON report, `findings` is a list of objects with `rule`, `severity`, `namespace`, `policy`, `path`, `line`, `message` and `suggestion`. `summary.findings` has the counts by severity. `policies_not_analyzed` lists policies that could not be parsed, with a `reason`. `unknown_mount_check_skipped` lists namespaces where MITCH-POL-007 did not run. All three lists are `[]` when empty.
+In the JSON report, `findings` is a list of objects with `rule`, `severity`, `namespace`, `policy`, `path`, `file`, `line`, `message` and `suggestion`. For policy findings, `file` is empty and `line` is the line in the policy. Git findings share the list; see [Comparing with git](git-drift.md#json-fields). `summary.findings` has the counts by severity. `policies_not_analyzed` lists policies that could not be parsed, with a `reason`. `unknown_mount_check_skipped` lists namespaces where MITCH-POL-007 did not run. All three lists are `[]` when empty.

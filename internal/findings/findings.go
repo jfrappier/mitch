@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/jfrappier/mitch/internal/builtin"
 	"github.com/jfrappier/mitch/internal/checks"
 	"github.com/jfrappier/mitch/internal/scan"
 )
@@ -59,16 +60,25 @@ const (
 	RuleUnknownMount       = "MITCH-POL-007"
 )
 
-// Finding is one problem in one path block of one policy.
+// Finding is one problem Mitch found. Policy findings (MITCH-POL-*) are about
+// one path block of one policy. Git findings (MITCH-GIT-*) compare Vault with
+// the Terraform in a git checkout.
 type Finding struct {
 	Rule     string `json:"rule"`
 	Severity string `json:"severity"`
-	// Namespace is the policy's namespace, "" for root.
+	// Namespace is the namespace the finding is about, "" for root.
 	Namespace string `json:"namespace"`
-	Policy    string `json:"policy"`
-	// Path is the policy path the finding is about, and Line is where its
-	// block starts in the policy text.
-	Path       string `json:"path"`
+	// Policy is the ACL policy's name, when the finding is about a policy.
+	Policy string `json:"policy"`
+	// Path is the policy path (for policy findings) or the mount path (for
+	// git findings about a secrets engine or auth method).
+	Path string `json:"path"`
+	// File is the Terraform file in the git checkout, relative to the
+	// checkout, for git findings about a resource in git. Empty otherwise.
+	File string `json:"file"`
+	// Line is where the path block starts in the policy text (policy
+	// findings), or where the resource starts in File (git findings).
+	// 0 when there is no line to point at.
 	Line       int    `json:"line"`
 	Message    string `json:"message"`
 	Suggestion string `json:"suggestion"`
@@ -105,10 +115,6 @@ func (r Result) CountAtOrAbove(threshold string) int {
 	return count
 }
 
-// builtInPolicies are policies Vault manages itself. "root" cannot be read
-// as text; "default" is checked like any other, because people edit it.
-var builtInPolicies = map[string]bool{"root": true}
-
 // Analyze checks every ACL policy in a scan.
 func Analyze(inventory scan.Inventory) Result {
 	result := Result{Findings: []Finding{}, NotAnalyzed: []NotAnalyzed{}, UnknownMountCheckSkipped: []string{}}
@@ -121,7 +127,9 @@ func Analyze(inventory scan.Inventory) Result {
 		}
 
 		for _, policy := range namespace.ACLPolicies {
-			if builtInPolicies[policy.Name] {
+			// "root" cannot be read as text. "default" is checked like any
+			// other policy, because people edit it.
+			if policy.Name == builtin.RootPolicy {
 				continue
 			}
 			rules, err := parsePolicy(policy.Text)

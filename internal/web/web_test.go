@@ -73,7 +73,7 @@ func newFakeScans() *fakeScans {
 func newTestServer(t *testing.T, scans ScanSource) *httptest.Server {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	server, err := NewServer(scans, logger, testToken)
+	server, err := NewServer(scans, logger, testToken, nil)
 	if err != nil {
 		t.Fatalf("NewServer failed: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestReportPage(t *testing.T) {
 	if response.StatusCode != http.StatusOK {
 		t.Fatalf("HTTP %d:\n%s", response.StatusCode, body)
 	}
-	for _, expected := range []string{"Scan new2", "Vault 2.2.2", "added/", "<td>(root)</td>", "Not collected", "Policy findings", "0 critical, 0 high, 0 medium, 0 low"} {
+	for _, expected := range []string{"Scan new2", "Vault 2.2.2", "added/", "<td>(root)</td>", "Not collected", "Findings", "0 critical, 1 high, 0 medium, 0 low", "MITCH-GIT-001", "No git checkout was given"} {
 		if !strings.Contains(body, expected) {
 			t.Errorf("report is missing %q:\n%s", expected, body)
 		}
@@ -218,7 +218,7 @@ func TestReportPageShowsFindings(t *testing.T) {
 	if response.StatusCode != http.StatusOK {
 		t.Fatalf("HTTP %d:\n%s", response.StatusCode, body)
 	}
-	for _, expected := range []string{"1 critical, 0 high", "<td>critical</td><td>MITCH-POL-001</td>", "<td>broken</td>", "could not be parsed"} {
+	for _, expected := range []string{"1 critical, 1 high", "<td>critical</td><td>MITCH-POL-001</td>", "<td>broken</td>", "could not be parsed"} {
 		if !strings.Contains(body, expected) {
 			t.Errorf("report is missing %q:\n%s", expected, body)
 		}
@@ -308,7 +308,7 @@ func TestSecurityHeadersAndStylesheet(t *testing.T) {
 }
 
 func TestNewServerNeedsAToken(t *testing.T) {
-	_, err := NewServer(newFakeScans(), slog.New(slog.NewTextHandler(io.Discard, nil)), "")
+	_, err := NewServer(newFakeScans(), slog.New(slog.NewTextHandler(io.Discard, nil)), "", nil)
 	if err == nil {
 		t.Error("NewServer must refuse an empty token")
 	}

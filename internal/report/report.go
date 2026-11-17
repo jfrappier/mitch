@@ -1,7 +1,8 @@
 // Package report builds a readable summary of one saved scan: what is in
 // Vault, counted and grouped, plus anything the scan could not read.
 //
-// It works only on a stored inventory. It never contacts Vault.
+// It works only on a stored inventory and, with --repo, on Terraform read
+// from a local git checkout. It never contacts Vault.
 package report
 
 import (
@@ -9,12 +10,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jfrappier/mitch/internal/drift"
 	"github.com/jfrappier/mitch/internal/findings"
 	"github.com/jfrappier/mitch/internal/scan"
 )
 
 // rootNamespaceLabel is how the root namespace (path "") is shown.
 const rootNamespaceLabel = "(root)"
+
+// allNamespacesLabel is the namespace shown on a finding about every
+// namespace at once, such as "no git repository was given".
+const allNamespacesLabel = "(all)"
 
 // supportedStatus is the deprecation status Vault gives a plugin that is not
 // deprecated. Any other non-empty status is reported.
@@ -50,15 +56,21 @@ type Report struct {
 
 	VersionHistory []scan.VersionHistoryEntry `json:"version_history"`
 
-	// Findings are policy problems, most serious first. They are worked out
-	// from the saved scan each time a report is built; they are never stored.
-	// The namespace of each finding uses the same "(root)" label as above.
+	// Findings are policy problems and differences from git, most serious
+	// first. They are worked out each time a report is built, from the saved
+	// scan and the --repo checkout; they are never stored. The namespace of
+	// each finding uses the same "(root)" label as above, or "(all)" for a
+	// finding about every namespace.
 	Findings []findings.Finding `json:"findings"`
 	// PoliciesNotAnalyzed are policies Mitch could not parse, with the reason.
 	PoliciesNotAnalyzed []findings.NotAnalyzed `json:"policies_not_analyzed"`
 	// UnknownMountCheckSkipped lists namespaces where rule MITCH-POL-007 did
 	// not run, because the scan could not list the mounts there.
 	UnknownMountCheckSkipped []string `json:"unknown_mount_check_skipped"`
+
+	// Git says what Mitch read from the --repo checkout, and what it could
+	// not compare.
+	Git GitSection `json:"git"`
 
 	// Skipped and NotRequested explain what the scan could not read, or
 	// left out on purpose. Counts above leave these parts out.
@@ -101,8 +113,29 @@ type Summary struct {
 
 	SkippedChecks int `json:"skipped_checks"`
 
-	// Findings counts policy findings by severity.
+	// Findings counts policy and git findings by severity.
 	Findings FindingCounts `json:"findings"`
+}
+
+// GitSection is what Mitch read from the git checkout given with --repo.
+type GitSection struct {
+	// RepoGiven is false when the report was built without --repo. The
+	// other fields are then empty, and Findings holds MITCH-GIT-001.
+	RepoGiven bool `json:"repo_given"`
+	// Path is the checkout path as it was given.
+	Path string `json:"path"`
+	// FilesRead counts the .tf and .tf.json files read.
+	FilesRead int `json:"files_read"`
+	// Resources counts the Vault policies, secrets engines and auth
+	// methods found in those files.
+	Resources int `json:"resources"`
+	// NotChecked lists resources, or parts of them, that Mitch could not
+	// work out without running Terraform, such as a path set from a
+	// variable. They are never reported as drift.
+	NotChecked []drift.NotChecked `json:"not_checked"`
+	// NotCompared says what was left out of the comparison and why, for
+	// example a namespace whose policies the scan could not list.
+	NotCompared []string `json:"not_compared"`
 }
 
 // FindingCounts is how many findings there are at each severity.
@@ -184,8 +217,10 @@ const (
 	whereCatalog      = "catalog"
 )
 
-// Build makes the report for one saved scan.
-func Build(scanID string, inventory scan.Inventory) Report {
+// Build makes the report for one saved scan. repo is the checkout read with
+// drift.ReadRepo, or nil when no --repo was given; the report then gets the
+// one "no git repository" finding.
+func Build(scanID string, inventory scan.Inventory, repo *drift.Repo) Report {
 	built := Report{
 		Scan: ScanInfo{
 			ID:            scanID,
@@ -214,6 +249,8 @@ func Build(scanID string, inventory scan.Inventory) Report {
 	addPlugins(&built, inventory.Plugins)
 	addAuditDevices(&built, inventory.AuditDevices)
 	addFindings(&built, findings.Analyze(inventory))
+	addGit(&built, repo, inventory)
+	sortBySeverity(built.Findings)
 
 	built.MountTypes = countMountTypes(built.SecretsEngines, built.AuthMethods)
 	built.Summary.Namespaces = len(inventory.Namespaces)
@@ -343,18 +380,7 @@ func addFindings(built *Report, analyzed findings.Result) {
 	built.Findings = []findings.Finding{}
 	for _, finding := range analyzed.Findings {
 		finding.Namespace = namespaceLabel(finding.Namespace)
-		built.Findings = append(built.Findings, finding)
-
-		switch finding.Severity {
-		case findings.SeverityCritical:
-			built.Summary.Findings.Critical++
-		case findings.SeverityHigh:
-			built.Summary.Findings.High++
-		case findings.SeverityMedium:
-			built.Summary.Findings.Medium++
-		case findings.SeverityLow:
-			built.Summary.Findings.Low++
-		}
+		addFinding(built, finding)
 	}
 
 	built.PoliciesNotAnalyzed = []findings.NotAnalyzed{}
@@ -369,11 +395,75 @@ func addFindings(built *Report, analyzed findings.Result) {
 	}
 }
 
-// CountFindingsAtOrAbove counts findings at or above a severity. It is what
-// "mitch report --fail-on" checks.
+// addGit compares the scan with the --repo checkout and adds what differs
+// to the findings. Without a checkout it adds the one "no git repository"
+// finding instead.
+func addGit(built *Report, repo *drift.Repo, inventory scan.Inventory) {
+	built.Git = GitSection{NotChecked: []drift.NotChecked{}, NotCompared: []string{}}
+
+	if repo == nil {
+		noRepo := drift.NoRepoFinding()
+		noRepo.Namespace = allNamespacesLabel
+		addFinding(built, noRepo)
+		return
+	}
+
+	built.Git.RepoGiven = true
+	built.Git.Path = repo.Path
+	built.Git.FilesRead = repo.FilesRead
+	built.Git.Resources = len(repo.Resources)
+	built.Git.NotChecked = nonNil(repo.NotChecked)
+
+	compared := drift.Compare(*repo, inventory)
+	built.Git.NotCompared = nonNil(compared.NotCompared)
+	for _, finding := range compared.Findings {
+		finding.Namespace = namespaceLabel(finding.Namespace)
+		addFinding(built, finding)
+	}
+}
+
+// addFinding adds one finding to the report and counts it by severity.
+// The caller sets the namespace label first.
+func addFinding(built *Report, finding findings.Finding) {
+	built.Findings = append(built.Findings, finding)
+
+	switch finding.Severity {
+	case findings.SeverityCritical:
+		built.Summary.Findings.Critical++
+	case findings.SeverityHigh:
+		built.Summary.Findings.High++
+	case findings.SeverityMedium:
+		built.Summary.Findings.Medium++
+	case findings.SeverityLow:
+		built.Summary.Findings.Low++
+	}
+}
+
+// sortBySeverity puts the most serious findings first. Within a severity,
+// policy findings stay before git findings, each in the order its own
+// package already sorted them, so output is the same every run.
+func sortBySeverity(found []findings.Finding) {
+	sort.SliceStable(found, func(i, j int) bool {
+		left := found[i].Severity
+		right := found[j].Severity
+		// left comes first only when it is strictly more serious.
+		return findings.AtOrAbove(left, right) && !findings.AtOrAbove(right, left)
+	})
+}
+
+// CountFindingsAtOrAbove counts findings, policy and git, at or above a
+// severity. It is what "mitch report --fail-on" checks.
+//
+// The "no git repository" finding (MITCH-GIT-001) is never counted. A CI
+// job often cannot reach the repository where a team keeps its Terraform,
+// so a report without --repo must still be able to pass --fail-on. The
+// finding stays in the report, so nobody mistakes "passed" for "checked".
 func (r Report) CountFindingsAtOrAbove(threshold string) int {
 	count := 0
 	for _, finding := range r.Findings {
+		if finding.Rule == drift.RuleNoRepo {
+			continue
+		}
 		if findings.AtOrAbove(finding.Severity, threshold) {
 			count++
 		}

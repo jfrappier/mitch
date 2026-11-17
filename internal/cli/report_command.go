@@ -15,10 +15,12 @@ import (
 
 // runReport summarizes one saved scan. With no --scan it uses the newest one.
 //
-//	mitch report [--scan ID] [--format markdown|json] [--output FILE.md|FILE.json] [--fail-on SEVERITY] [--db PATH] [--passphrase-file FILE]
+//	mitch report [--scan ID] [--repo PATH] [--format markdown|json] [--output FILE.md|FILE.json] [--fail-on SEVERITY] [--db PATH] [--passphrase-file FILE]
 //
-// With --fail-on, it exits with code 4 when any policy finding is at or
-// above that severity, so a CI job can fail on it.
+// With --repo, it compares the scan with the Terraform in that local git
+// checkout. With --fail-on, it exits with code 4 when any finding, policy or
+// git, is at or above that severity, so a CI job can fail on it. The "no git
+// repository" finding is never counted, so CI without --repo can still pass.
 func runReport(runContext runContext, arguments []string) int {
 	flags := flag.NewFlagSet("mitch report", flag.ContinueOnError)
 	flags.SetOutput(runContext.stderr)
@@ -26,7 +28,8 @@ func runReport(runContext runContext, arguments []string) int {
 	scanID := flags.String("scan", "", `id of the saved scan (see "mitch history"); default: the newest scan`)
 	format := flags.String("format", formatMarkdown, "what to print in the terminal: markdown or json")
 	outputPath := flags.String("output", "", "also save the report to this file; .md saves Markdown, .json saves JSON")
-	failOn := flags.String("fail-on", "", "exit with code 4 when any policy finding is at or above this severity: "+strings.Join(findings.Severities(), ", ")+"; default: never")
+	repoPath := flags.String("repo", "", repoFlagUsage)
+	failOn := flags.String("fail-on", "", "exit with code 4 when any finding (except MITCH-GIT-001, no --repo) is at or above this severity: "+strings.Join(findings.Severities(), ", ")+"; default: never")
 
 	exitCode, parsed := parseCommandFlags(runContext, flags, arguments)
 	if !parsed {
@@ -42,6 +45,10 @@ func runReport(runContext runContext, arguments []string) int {
 	if *failOn != "" && !findings.IsSeverity(*failOn) {
 		fmt.Fprintf(runContext.stderr, "mitch report: --fail-on %q is not a severity; use one of: %s\n", *failOn, strings.Join(findings.Severities(), ", "))
 		return exitcode.UsageError
+	}
+	repo, exitCode, read := readRepoFlag(runContext, "mitch report", *repoPath)
+	if !read {
+		return exitCode
 	}
 
 	reportLogger := logging.ForComponent(runContext.logger, "report")
@@ -73,7 +80,7 @@ func runReport(runContext runContext, arguments []string) int {
 	if !loaded {
 		return exitCode
 	}
-	built := report.Build(*scanID, inventory)
+	built := report.Build(*scanID, inventory, repo)
 
 	// Step 3: show it, and save it if --output was given.
 	rendered, err := renderReport(built)
@@ -96,7 +103,7 @@ func runReport(runContext runContext, arguments []string) int {
 		)
 	}
 	if len(built.PoliciesNotAnalyzed) > 0 {
-		reportLogger.Warn("some policies could not be parsed, so they were not checked for findings; see \"Policy findings\"",
+		reportLogger.Warn("some policies could not be parsed, so they were not checked for findings; see \"Findings\"",
 			logging.FieldOperation, "report",
 			"scan_id", *scanID,
 			"policies_not_analyzed", len(built.PoliciesNotAnalyzed),
@@ -107,7 +114,7 @@ func runReport(runContext runContext, arguments []string) int {
 	if *failOn != "" {
 		count := built.CountFindingsAtOrAbove(*failOn)
 		if count > 0 {
-			reportLogger.Error("policy findings at or above the --fail-on severity",
+			reportLogger.Error("findings at or above the --fail-on severity",
 				logging.FieldOperation, "fail_on",
 				"scan_id", *scanID,
 				"fail_on", *failOn,

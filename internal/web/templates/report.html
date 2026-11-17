@@ -20,15 +20,15 @@
 <tr><th>Plugins</th><td>{{.Summary.BuiltinPlugins}} built in, {{.Summary.RegisteredPlugins}} registered by hand</td></tr>
 <tr><th>Deprecated</th><td>{{.Summary.Deprecated}}</td></tr>
 <tr><th>Skipped checks</th><td>{{.Summary.SkippedChecks}}</td></tr>
-<tr><th>Policy findings</th><td>{{.Summary.Findings.Critical}} critical, {{.Summary.Findings.High}} high, {{.Summary.Findings.Medium}} medium, {{.Summary.Findings.Low}} low</td></tr>
+<tr><th>Findings</th><td>{{.Summary.Findings.Critical}} critical, {{.Summary.Findings.High}} high, {{.Summary.Findings.Medium}} medium, {{.Summary.Findings.Low}} low</td></tr>
 </tbody>
 </table></div>
 
-<h2 id="findings">Policy findings</h2>
+<h2 id="findings">Findings</h2>
 {{if .Findings}}
 <div class="table-wrap"><table>
-<thead><tr><th>Severity</th><th>Rule</th><th>Namespace</th><th>Policy</th><th>Path</th><th>Line</th><th>Finding</th><th>Suggestion</th></tr></thead>
-<tbody>{{range .Findings}}<tr><td>{{.Severity}}</td><td>{{.Rule}}</td><td>{{.Namespace}}</td><td>{{.Policy}}</td><td><code>{{.Path}}</code></td><td>{{.Line}}</td><td>{{.Message}}</td><td>{{.Suggestion}}</td></tr>{{end}}</tbody>
+<thead><tr><th>Severity</th><th>Rule</th><th>Namespace</th><th>Policy</th><th>Path</th><th>File</th><th>Line</th><th>Finding</th><th>Suggestion</th></tr></thead>
+<tbody>{{range .Findings}}<tr><td>{{.Severity}}</td><td>{{.Rule}}</td><td>{{.Namespace}}</td><td>{{.Policy}}</td><td><code>{{.Path}}</code></td><td>{{.File}}</td><td>{{if .Line}}{{.Line}}{{end}}</td><td>{{.Message}}</td><td>{{.Suggestion}}</td></tr>{{end}}</tbody>
 </table></div>
 {{else}}
 <p>None found.</p>
@@ -42,6 +42,30 @@
 {{end}}
 {{if .UnknownMountCheckSkipped}}
 <p>Paths to missing mounts (MITCH-POL-007) were not checked in {{range $index, $namespace := .UnknownMountCheckSkipped}}{{if $index}}, {{end}}{{$namespace}}{{end}}, because the scan could not list the mounts there.</p>
+{{end}}
+
+<h2 id="git">Git comparison</h2>
+{{with .Git}}
+{{if .RepoGiven}}
+<ul class="facts">
+  <li>Checkout: <code>{{.Path}}</code></li>
+  <li>Terraform files read: {{.FilesRead}}</li>
+  <li>Vault resources found: {{.Resources}}</li>
+</ul>
+{{if .NotChecked}}
+<p>Not checked: Mitch cannot work these out without running Terraform, so they are never reported as drift.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Resource</th><th>File</th><th>Line</th><th>Reason</th></tr></thead>
+<tbody>{{range .NotChecked}}<tr><td><code>{{.Address}}</code></td><td>{{.File}}</td><td>{{.Line}}</td><td>{{.Reason}}</td></tr>{{end}}</tbody>
+</table></div>
+{{end}}
+{{if .NotCompared}}
+<p>Not compared:</p>
+<ul>{{range .NotCompared}}<li>{{.}}</li>{{end}}</ul>
+{{end}}
+{{else}}
+<p>No git checkout was given (<code>mitch serve --repo</code>), so Vault was not compared with Terraform.</p>
+{{end}}
 {{end}}
 
 {{if .Deprecated}}

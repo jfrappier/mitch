@@ -1,6 +1,6 @@
 ---
 title: Developing Mitch
-weight: 13
+weight: 14
 ---
 
 ## Requirements
@@ -41,8 +41,9 @@ CI runs all of these on every pull request. See [`.github/workflows/ci.yml`](htt
 | `modernc.org/sqlite` | SQLite driver, no cgo | `github.com/ncruces/go-sqlite3` |
 | `golang.org/x/crypto/argon2` | Passphrase key derivation | Standard library `crypto/pbkdf2` |
 | `golang.org/x/term` | Passphrase prompt that does not echo | `MITCH_PASSPHRASE` or `--passphrase-file` only |
+| `github.com/hashicorp/hcl/v2` | Read Terraform files for `--repo`; Terraform uses this library | None equivalent |
 
-Each is added in the pull request that first needs it. In use today: all five. `github.com/hashicorp/hcl/v2` is approved for the planned `--repo` drift check, which reads Terraform files, and is not in use yet.
+Each is added in the pull request that first needs it. In use today: all six. `hcl/v2` brings `github.com/zclconf/go-cty`, its value type, which Mitch imports directly because `hcl/v2`'s functions take and return `cty` values. It also brings `agext/levenshtein`, `apparentlymart/go-textseg`, `mitchellh/go-wordwrap` and `golang.org/x/{mod,sync,tools}`, all pure Go.
 
 `vault/api` brings in these indirect dependencies, all pure Go: `cenkalti/backoff`, `go-jose/go-jose`, HashiCorp's `errwrap`, `go-cleanhttp`, `go-multierror`, `go-retryablehttp`, `go-rootcerts`, `go-secure-stdlib`, `go-sockaddr`, `mitchellh/go-homedir`, `mitchellh/mapstructure`, `ryanuber/go-glob`, and `golang.org/x/{net,text,time}`. `modernc.org/sqlite` brings in `modernc.org/{libc,mathutil,memory}`, `dustin/go-humanize`, `google/uuid`, `mattn/go-isatty`, `ncruces/go-strftime`, `remyoudompheng/bigfft` and `golang.org/x/sys`, all pure Go. The exact versions are in [`go.mod`](https://github.com/jfrappier/mitch/blob/main/go.mod).
 

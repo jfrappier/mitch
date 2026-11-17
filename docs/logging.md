@@ -1,6 +1,6 @@
 ---
 title: Logging
-weight: 11
+weight: 12
 ---
 
 Mitch writes every log line in the same format, so people can read it and log tools can parse it without custom rules.

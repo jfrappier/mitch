@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/jfrappier/mitch/internal/drift"
 	"github.com/jfrappier/mitch/internal/logging"
 	"github.com/jfrappier/mitch/internal/store"
 )
@@ -53,11 +54,15 @@ type Server struct {
 	logger      *slog.Logger
 	accessToken string
 	pages       map[string]*template.Template
+	// repo is the --repo checkout, read once when "mitch serve" starts.
+	// nil means no --repo was given.
+	repo *drift.Repo
 }
 
 // NewServer prepares the UI. accessToken is the secret every request must
-// carry; use NewAccessToken to make one.
-func NewServer(scans ScanSource, logger *slog.Logger, accessToken string) (*Server, error) {
+// carry; use NewAccessToken to make one. repo is the checkout every report
+// is compared with, or nil when no --repo was given.
+func NewServer(scans ScanSource, logger *slog.Logger, accessToken string, repo *drift.Repo) (*Server, error) {
 	if accessToken == "" {
 		return nil, fmt.Errorf("the web UI needs an access token")
 	}
@@ -70,6 +75,7 @@ func NewServer(scans ScanSource, logger *slog.Logger, accessToken string) (*Serv
 		logger:      logging.ForComponent(logger, "web"),
 		accessToken: accessToken,
 		pages:       pages,
+		repo:        repo,
 	}
 	return server, nil
 }
