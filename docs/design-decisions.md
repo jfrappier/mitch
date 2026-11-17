@@ -12,7 +12,7 @@ Each decision below says what was chosen, why, and what it means for you as a us
 ## KV secrets are counted, not named
 
 **Decision:** Mitch counts secrets and folders in every KV v1 and v2 mount by listing key names, one request at a time. It records only the counts per mount, never key or folder names. The policy that allows this, `mitch-scanner-kv`, names each mount exactly instead of using a wildcard. Counting is on by default; `--kv=false` turns it off.
-**Impact:** Folder names, which can reveal what a Vault holds, stay out of the inventory and logs. You run `mitch policy --kv2-mount <mount>` for your KV mounts and update the policy when you add one. Until you do, the scan exits with code 5 and names the command to run.
+**Impact:** Folder names, which can reveal what a Vault holds, stay out of the inventory and logs. For the same reason, policy findings never suggest replacing a glob with the exact folders in use. You run `mitch policy --kv2-mount <mount>` for your KV mounts and update the policy when you add one. Until you do, the scan exits with code 5 and names the command to run.
 
 ## One Go binary, no runtime
 
@@ -69,4 +69,4 @@ Each decision below says what was chosen, why, and what it means for you as a us
 ## Supported Vault versions
 
 **Decision:** Vault 1.19 and later, tested against 2.x.
-**Impact:** Older versions may work but are not tested.
+**Impact:** Older versions may work but are not tested. CI tests against Vault Community, so Enterprise namespaces are covered by unit tests only. In particular, the Terraform provider aliases for namespaces have not been run against Vault Enterprise yet.
