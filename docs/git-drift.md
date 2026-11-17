@@ -1,6 +1,6 @@
 ---
 title: Comparing with git
-weight: 5
+weight: 6
 ---
 
 Mitch can compare a saved scan with the Terraform in a local git checkout, and report every ACL policy, secrets engine and auth method that is in Vault but not in git, in git but not in Vault, or different between the two. This is how you confirm that Vault is managed as code, and catch changes someone made by hand.

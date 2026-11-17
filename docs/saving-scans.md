@@ -1,6 +1,6 @@
 ---
 title: Saving scans
-weight: 1
+weight: 2
 ---
 
 `mitch scan` saves each scan, encrypted, in a local database. Later commands read from it, so you can look back at earlier scans. How the data is protected is described in [How Mitch protects your data](data-security.md).

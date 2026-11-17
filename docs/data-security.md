@@ -1,6 +1,6 @@
 ---
 title: How Mitch protects your data
-weight: 10
+weight: 11
 ---
 
 Mitch saves each scan in a local SQLite file, encrypted with a key that only your passphrase can unlock. A stolen database file or a leaked backup is unreadable without the passphrase. To set it up, see [Saving scans](saving-scans.md).

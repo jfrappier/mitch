@@ -8,11 +8,12 @@ Mitch scans a HashiCorp Vault cluster, read-only, and saves an encrypted invento
 
 | Step | Page | What you do there |
 | --- | --- | --- |
-| 1 | [Saving scans](saving-scans.md) | Choose a passphrase and create the encrypted database with `mitch init`. |
-| 2 | [Scanning Vault](scanning.md) | Load Mitch's Vault policy, create a token, and run `mitch scan`. |
-| 3 | [Reports](reports.md) | Summarize a scan with `mitch report`. |
-| 4 | [Policy findings](findings.md) | Find risky ACL policies, and fail CI with `mitch report --fail-on`. |
-| 5 | [Comparing with git](git-drift.md) | Check that Vault matches your Terraform with `mitch report --repo`. |
+| 1 | [Installing Mitch](installing.md) | Download a release binary or pull the Docker image, and check it. |
+| 2 | [Saving scans](saving-scans.md) | Choose a passphrase and create the encrypted database with `mitch init`. |
+| 3 | [Scanning Vault](scanning.md) | Load Mitch's Vault policy, create a token, and run `mitch scan`. |
+| 4 | [Reports](reports.md) | Summarize a scan with `mitch report`. |
+| 5 | [Policy findings](findings.md) | Find risky ACL policies, and fail CI with `mitch report --fail-on`. |
+| 6 | [Comparing with git](git-drift.md) | Check that Vault matches your Terraform with `mitch report --repo`. |
 
 ## Use your scans
 
@@ -21,7 +22,7 @@ Mitch scans a HashiCorp Vault cluster, read-only, and saves an encrypted invento
 | [Comparing scans](comparing-scans.md) | `mitch diff` | What changed in Vault between two scans. |
 | [Generating Terraform](terraform.md) | `mitch terraform` | Write Terraform with import blocks, then let Terraform manage Vault. |
 | [The web UI](web-ui.md) | `mitch serve` | Browse scans, reports and changes in your browser. |
-| [Running in Docker](docker.md) | `docker run ... mitch` | Build the image and keep the database on a volume. |
+| [Running in Docker](docker.md) | `docker run ... mitch` | Run the published image and keep the database on a volume. |
 
 ## Understand Mitch
 

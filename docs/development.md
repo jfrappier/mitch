@@ -1,6 +1,6 @@
 ---
 title: Developing Mitch
-weight: 14
+weight: 15
 ---
 
 ## Requirements
@@ -92,3 +92,35 @@ The pages in `docs/` are the documentation. The `website/` folder turns them int
 - **Link pages by file name**, for example `[Reports](reports.md)`. Links work both on GitHub and on the site. Link anything outside `docs/` with its full GitHub URL.
 - **No custom CSS or JavaScript.** The site uses Hextra as it ships, so theme upgrades stay simple.
 - **CI builds the site on every pull request** and fails on any Hugo warning. A push to `main` publishes it to GitHub Pages.
+
+## Releasing
+
+A release is a version tag. Pushing one runs [`.github/workflows/release.yml`](https://github.com/jfrappier/mitch/blob/main/.github/workflows/release.yml), which:
+
+1. Builds the binaries for every platform in the [Installing](installing.md) table, and writes `SHA256SUMS`.
+2. Runs the arm64 binaries on real arm64 machines (a Mac and a Linux runner).
+3. Builds the linux/amd64 and linux/arm64 image, pushes it to `ghcr.io/jfrappier/mitch`, and signs a build provenance attestation for it.
+4. Pulls the pushed image on amd64 and arm64 runners and runs it.
+5. Signs build provenance attestations for the binaries, then creates the GitHub Release with the binaries and `SHA256SUMS` attached and notes generated from the merged pull requests.
+
+The release is created last, so a failure in any earlier step means no release. Every pull request runs steps 1 to 4 without pushing anything.
+
+Only plain versions publish: the tag must look like `v0.1.0` ([tag filter docs](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#filter-pattern-cheat-sheet)). A tag such as `v0.1.0-rc1` does nothing.
+
+To release, from an up-to-date `main` whose CI is green:
+
+```shell
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Then watch the run on the [Actions tab](https://github.com/jfrappier/mitch/actions/workflows/release.yml).
+
+### After the first release only: make the image public
+
+GitHub makes a new package private ([docs](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility#configuring-visibility-of-packages-for-your-personal-account)), so nobody else can pull it until you change this once:
+
+1. Open the [mitch package page](https://github.com/users/jfrappier/packages/container/package/mitch) and click **Package settings** on the right.
+2. At the bottom, under **Danger Zone**, click **Change visibility**, select **Public**, type `mitch` and confirm.
+
+A public package cannot be made private again.

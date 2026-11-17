@@ -1,6 +1,6 @@
 ---
 title: Design decisions
-weight: 11
+weight: 12
 ---
 
 Each decision below says what was chosen, why, and what it means for you as a user.

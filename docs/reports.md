@@ -1,6 +1,6 @@
 ---
 title: Reports
-weight: 3
+weight: 4
 ---
 
 `mitch report` summarizes one saved scan: what is in Vault, counted and grouped, and anything the scan could not read. It reads only the saved, encrypted scan and never contacts Vault.

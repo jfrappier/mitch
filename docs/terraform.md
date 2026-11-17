@@ -1,6 +1,6 @@
 ---
 title: Generating Terraform
-weight: 7
+weight: 8
 ---
 
 `mitch terraform` writes Terraform configuration for the Vault setup in a saved scan, with [import blocks](https://developer.hashicorp.com/terraform/language/import) so Terraform adopts what already exists instead of creating it again. It reads only the saved, encrypted scan and never contacts Vault.
