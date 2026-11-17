@@ -27,14 +27,23 @@ mitch report --output report.json
 
 The terminal still shows the Markdown, and `report.json` gets the same report as JSON. Use `--output report.md` to save the Markdown instead.
 
+## 3. Compare it with git
+
+```shell
+mitch report --repo ~/src/vault-terraform
+```
+
+This also compares the scan with the Terraform in a local git checkout. Without `--repo`, the report has one high finding, MITCH-GIT-001. See [Comparing with git](git-drift.md).
+
 ## What the report shows
 
 | Section | What it lists |
 | --- | --- |
 | Header | Scan id and time, Vault address, version, edition, cluster name, and whether sudo checks ran. |
-| Summary | Counts of namespaces, secrets engines, auth methods, ACL policies, KV secrets, plugins, deprecated items, skipped checks and policy findings by severity. |
+| Summary | Counts of namespaces, secrets engines, auth methods, ACL policies, KV secrets, plugins, deprecated items, skipped checks and findings by severity. |
 | Scan gaps | Checks that could not run (with the HTTP status, reason and next step) and checks left out on purpose, such as sudo checks. Only shown when there are any. |
-| Policy findings | Problems in ACL policies, most serious first, with the rule, path, line and a suggested fix. Also any policy that could not be parsed. See [Policy findings](findings.md). |
+| Findings | Problems in ACL policies and differences from git, most serious first, with the rule, path, file, line and a suggested fix. Also any policy that could not be parsed. See [Policy findings](findings.md) and [Comparing with git](git-drift.md). |
+| Git comparison | The `--repo` checkout, how many Terraform files and resources were read, and what could not be checked or compared. |
 | Mounts by type | Secrets engines and auth methods counted by type, most common first. |
 | Secrets engines, Auth methods | Every mount, by namespace, with its type, plugin version and description. |
 | KV secrets | Secrets and folders per KV mount. "no, counts are a lower bound" means part of the mount could not be listed. |
@@ -68,7 +77,8 @@ The file's format comes from its extension: `.json` or `.md`, in any case. Any o
 | `--scan ID` | newest scan | The scan to report on. |
 | `--format markdown\|json` | `markdown` | What the terminal shows. |
 | `--output FILE` | none | Also save to `FILE`: `.json` saves JSON, `.md` saves Markdown. |
-| `--fail-on SEVERITY` | never | Exit with code 4 when any policy finding is at or above `critical`, `high`, `medium` or `low`. The report still prints. See [Policy findings](findings.md#2-fail-a-ci-job-on-findings). |
+| `--repo PATH` | none | Compare the scan with the Terraform in this local git checkout. See [Comparing with git](git-drift.md). |
+| `--fail-on SEVERITY` | never | Exit with code 4 when any finding, policy or git, is at or above `critical`, `high`, `medium` or `low`. The report still prints. See [Policy findings](findings.md#2-fail-a-ci-job-on-findings). |
 | `--db PATH`, `--passphrase-file FILE` | | See [Saving scans](saving-scans.md). |
 
 ## The output is plain text

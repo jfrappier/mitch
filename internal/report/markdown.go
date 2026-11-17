@@ -18,6 +18,7 @@ func WriteMarkdown(output io.Writer, built Report) error {
 	writeSummary(text, built)
 	writeGaps(text, built)
 	writeFindings(text, built)
+	writeGit(text, built)
 	writeMountTypes(text, built)
 	writeMounts(text, "Secrets engines", built.SecretsEngines)
 	writeMounts(text, "Auth methods", built.AuthMethods)
@@ -73,7 +74,7 @@ func writeSummary(text *strings.Builder, built Report) {
 		[]string{"Plugins (built-in / registered)", fmt.Sprintf("%d / %d", summary.BuiltinPlugins, summary.RegisteredPlugins)},
 		[]string{"Deprecated mounts and registered plugins", fmt.Sprint(summary.Deprecated)},
 		[]string{"Skipped checks", fmt.Sprint(summary.SkippedChecks)},
-		[]string{"Policy findings (critical / high / medium / low)", fmt.Sprintf("%d / %d / %d / %d",
+		[]string{"Findings (critical / high / medium / low)", fmt.Sprintf("%d / %d / %d / %d",
 			summary.Findings.Critical, summary.Findings.High, summary.Findings.Medium, summary.Findings.Low)},
 	)
 	writeTable(text, []string{"Item", "Count"}, rows)
@@ -113,10 +114,12 @@ func writeGaps(text *strings.Builder, built Report) {
 	}
 }
 
-// writeFindings lists policy findings, most serious first, then any policy
-// Mitch could not check, so a clean list is never mistaken for a full check.
+// writeFindings lists policy and git findings, most serious first, then any
+// policy Mitch could not check, so a clean list is never mistaken for a full
+// check. For a policy finding, Line is the line in the policy; for a git
+// finding, it is the line in File.
 func writeFindings(text *strings.Builder, built Report) {
-	fmt.Fprintf(text, "\n## Policy findings\n\n")
+	fmt.Fprintf(text, "\n## Findings\n\n")
 	fmt.Fprintf(text, "Rules and fixes are explained in docs/findings.md.\n\n")
 	if len(built.Findings) == 0 {
 		fmt.Fprintf(text, "None found.\n")
@@ -125,10 +128,10 @@ func writeFindings(text *strings.Builder, built Report) {
 		for _, finding := range built.Findings {
 			rows = append(rows, []string{
 				finding.Severity, finding.Rule, finding.Namespace, finding.Policy,
-				finding.Path, fmt.Sprint(finding.Line), finding.Message, finding.Suggestion,
+				finding.Path, finding.File, lineOrBlank(finding.Line), finding.Message, finding.Suggestion,
 			})
 		}
-		writeTable(text, []string{"Severity", "Rule", "Namespace", "Policy", "Path", "Line", "Finding", "Suggestion"}, rows)
+		writeTable(text, []string{"Severity", "Rule", "Namespace", "Policy", "Path", "File", "Line", "Finding", "Suggestion"}, rows)
 	}
 
 	if len(built.PoliciesNotAnalyzed) > 0 {
@@ -144,6 +147,45 @@ func writeFindings(text *strings.Builder, built Report) {
 		fmt.Fprintf(text, "\nPaths to missing mounts (MITCH-POL-007) were not checked in these namespaces, because the scan could not list their mounts: %s\n",
 			strings.Join(built.UnknownMountCheckSkipped, ", "))
 	}
+}
+
+// writeGit says what was read from the --repo checkout, and what could not
+// be compared, so "no drift" is never mistaken for a full comparison.
+func writeGit(text *strings.Builder, built Report) {
+	fmt.Fprintf(text, "\n## Git comparison\n\n")
+	git := built.Git
+	if !git.RepoGiven {
+		fmt.Fprintf(text, "No git checkout was given (--repo), so Vault was not compared with Terraform.\n")
+		return
+	}
+
+	fmt.Fprintf(text, "- Checkout: %s\n", git.Path)
+	fmt.Fprintf(text, "- Terraform files read: %d\n", git.FilesRead)
+	fmt.Fprintf(text, "- Vault resources found: %d\n", git.Resources)
+
+	if len(git.NotChecked) > 0 {
+		fmt.Fprintf(text, "\nNot checked: Mitch cannot work these out without running Terraform, so they are never reported as drift.\n\n")
+		rows := [][]string{}
+		for _, gap := range git.NotChecked {
+			rows = append(rows, []string{gap.Address, gap.File, fmt.Sprint(gap.Line), gap.Reason})
+		}
+		writeTable(text, []string{"Resource", "File", "Line", "Reason"}, rows)
+	}
+
+	if len(git.NotCompared) > 0 {
+		fmt.Fprintf(text, "\nNot compared:\n\n")
+		for _, line := range git.NotCompared {
+			fmt.Fprintf(text, "- %s\n", line)
+		}
+	}
+}
+
+// lineOrBlank shows a line number, or nothing when there is none (0).
+func lineOrBlank(line int) string {
+	if line == 0 {
+		return ""
+	}
+	return fmt.Sprint(line)
 }
 
 func writeMountTypes(text *strings.Builder, built Report) {

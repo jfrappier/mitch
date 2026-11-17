@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/cookiejar"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -52,11 +53,14 @@ func TestServeShowsSavedScansAndStops(t *testing.T) {
 	stopSignalContext = func() (context.Context, context.CancelFunc) { return stopContext, stop }
 	t.Cleanup(func() { stopSignalContext = original })
 
+	// An empty checkout: read once at startup, and shown on every report.
+	repoFolder := t.TempDir()
+
 	stdout := &lockedBuffer{}
 	serveStderr := &lockedBuffer{}
 	finished := make(chan int, 1)
 	go func() {
-		finished <- Run([]string{"serve", "--listen", "127.0.0.1:0"}, stdout, serveStderr)
+		finished <- Run([]string{"serve", "--listen", "127.0.0.1:0", "--repo", repoFolder}, stdout, serveStderr)
 	}()
 
 	// Wait for the link, up to 10 seconds.
@@ -88,6 +92,18 @@ func TestServeShowsSavedScansAndStops(t *testing.T) {
 		t.Errorf("scan list: HTTP %d, want 200 listing %s:\n%s", response.StatusCode, scanID, body)
 	}
 
+	// The report compares the scan with the --repo checkout.
+	reportLink := strings.Replace(link, "/login?", "/scans/"+scanID+"?", 1)
+	response, err = client.Get(reportLink[:strings.Index(reportLink, "?")])
+	if err != nil {
+		t.Fatalf("opening the report failed: %v", err)
+	}
+	body, _ = io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusOK || !strings.Contains(string(body), "Checkout: <code>"+repoFolder+"</code>") {
+		t.Errorf("report: HTTP %d, want 200 naming the checkout %s:\n%s", response.StatusCode, repoFolder, body)
+	}
+
 	// The token never reaches the log.
 	token := link[strings.Index(link, "token=")+len("token="):]
 	if strings.Contains(serveStderr.String(), token) {
@@ -112,6 +128,18 @@ func TestServeRejectsBadListenAddress(t *testing.T) {
 		t.Errorf("exit %d, want %d", exitCode, exitcode.UsageError)
 	}
 	if !strings.Contains(stderr, "is not ADDRESS:PORT") {
+		t.Errorf("stderr is missing the reason: %s", stderr)
+	}
+}
+
+func TestServeRejectsBadRepo(t *testing.T) {
+	testDatabase(t)
+	missing := filepath.Join(t.TempDir(), "missing")
+	exitCode, _, stderr := runForTest("serve", "--listen", "127.0.0.1:0", "--repo", missing)
+	if exitCode != exitcode.UsageError {
+		t.Errorf("exit %d, want %d\n%s", exitCode, exitcode.UsageError, stderr)
+	}
+	if !strings.Contains(stderr, "mitch serve: --repo") {
 		t.Errorf("stderr is missing the reason: %s", stderr)
 	}
 }

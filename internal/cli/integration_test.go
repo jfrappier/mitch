@@ -615,6 +615,34 @@ func TestReportOnARealScan(t *testing.T) {
 	if built.Scan.VaultAddress != vault.address || !built.Summary.KVCounted || built.Summary.KVSecrets == 0 || built.Summary.BuiltinPlugins == 0 {
 		t.Errorf("the report does not match the scan: %+v", built.Summary)
 	}
+	if !hasFinding(built, "", "MITCH-GIT-001") {
+		t.Errorf("without --repo the report must have MITCH-GIT-001, got %+v", built.Findings)
+	}
+
+	// "mitch terraform" writes Terraform for this Vault. Comparing the same
+	// scan with that Terraform must find no drift at all.
+	terraformFolder := filepath.Join(t.TempDir(), "vault-terraform")
+	exitCode, _, stderr = runForTest("terraform", "--output-dir", terraformFolder)
+	if exitCode != exitcode.Success {
+		t.Fatalf("mitch terraform failed: exit %d\nstderr: %s", exitCode, stderr)
+	}
+	exitCode, stdout, stderr = runForTest("report", "--repo", terraformFolder, "--format", "json")
+	if exitCode != exitcode.Success {
+		t.Fatalf("report --repo failed: exit %d\nstderr: %s", exitCode, stderr)
+	}
+	var compared report.Report
+	err = json.Unmarshal([]byte(stdout), &compared)
+	if err != nil {
+		t.Fatalf("the --repo report is not JSON: %v\n%s", err, stdout)
+	}
+	if !compared.Git.RepoGiven || compared.Git.Resources == 0 || len(compared.Git.NotChecked) != 0 {
+		t.Errorf("expected every resource mitch terraform wrote to be read and checked, got %+v", compared.Git)
+	}
+	for _, finding := range compared.Findings {
+		if strings.HasPrefix(finding.Rule, "MITCH-GIT-") {
+			t.Errorf("Terraform from mitch terraform must match Vault, got %+v", finding)
+		}
+	}
 }
 
 // TestFindingsOnARealScan writes risky policies into a real Vault, scans,

@@ -96,7 +96,7 @@ func (s *Server) handleReport(response http.ResponseWriter, request *http.Reques
 		s.renderError(response, status, err.Error())
 		return
 	}
-	built := report.Build(scanID, inventory)
+	built := report.Build(scanID, inventory, s.repo)
 	s.render(response, pageReport, map[string]any{"Title": "Scan " + scanID, "Report": built})
 }
 

@@ -143,7 +143,8 @@ func TestReportShowsFindings(t *testing.T) {
 	if exitCode != exitcode.Success {
 		t.Fatalf("without --fail-on, findings must not change the exit code: exit %d\nstderr: %s", exitCode, stderr)
 	}
-	for _, expected := range []string{"## Policy findings", "| critical | MITCH-POL-001 | (root) | admin | * | 1 |", "| 1 / 0 / 0 / 0 |"} {
+	// Without --repo there is also the one high "no git repository" finding.
+	for _, expected := range []string{"## Findings", "| critical | MITCH-POL-001 | (root) | admin | * | - | 1 |", "| high | MITCH-GIT-001 | (all) |", "| 1 / 1 / 0 / 0 |"} {
 		if !strings.Contains(stdout, expected) {
 			t.Errorf("report is missing %q:\n%s", expected, stdout)
 		}
@@ -157,7 +158,9 @@ func TestReportFailOn(t *testing.T) {
 		failOn    string
 		exitCode  int
 	}{
-		{"low finding, fail on high", inventoryWithMissingMountPolicy(), "high", exitcode.Success},
+		// Without --repo, MITCH-GIT-001 is a high finding, so it counts too.
+		{"no repo, fail on critical", inventoryWithMissingMountPolicy(), "critical", exitcode.Success},
+		{"no repo, fail on high", inventoryWithMissingMountPolicy(), "high", exitcode.FindingsAboveThreshold},
 		{"low finding, fail on low", inventoryWithMissingMountPolicy(), "low", exitcode.FindingsAboveThreshold},
 		{"critical finding, fail on critical", inventoryWithRootLikePolicy(), "critical", exitcode.FindingsAboveThreshold},
 		{"critical finding, fail on medium", inventoryWithRootLikePolicy(), "medium", exitcode.FindingsAboveThreshold},
@@ -179,6 +182,97 @@ func TestReportFailOn(t *testing.T) {
 				t.Errorf("expected the --fail-on error in the log:\n%s", stderr)
 			}
 		})
+	}
+}
+
+// repoManagingMissingMountPolicy writes a checkout whose Terraform manages
+// exactly the policy in inventoryWithMissingMountPolicy, with the same text.
+func repoManagingMissingMountPolicy(t *testing.T) string {
+	t.Helper()
+	folder := t.TempDir()
+	terraform := `resource "vault_policy" "admin" {
+  name   = "admin"
+  policy = "path \"old-kv/*\" {\n  capabilities = [\"read\"]\n}"
+}
+`
+	err := os.WriteFile(filepath.Join(folder, "main.tf"), []byte(terraform), 0o600)
+	if err != nil {
+		t.Fatalf("writing main.tf failed: %v", err)
+	}
+	return folder
+}
+
+func TestReportWithRepo(t *testing.T) {
+	path := testDatabase(t)
+	runForTest("init")
+	saveTestScan(t, path, time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC), inventoryWithMissingMountPolicy())
+	folder := repoManagingMissingMountPolicy(t)
+
+	// Git matches Vault, so only the low policy finding is left, and
+	// --fail-on high passes.
+	exitCode, stdout, stderr := runForTest("report", "--repo", folder, "--fail-on", "high")
+	if exitCode != exitcode.Success {
+		t.Fatalf("expected exit 0, got %d\nstdout: %s\nstderr: %s", exitCode, stdout, stderr)
+	}
+	for _, expected := range []string{"## Git comparison", "- Checkout: " + folder, "- Terraform files read: 1", "- Vault resources found: 1", "| 0 / 0 / 0 / 1 |"} {
+		if !strings.Contains(stdout, expected) {
+			t.Errorf("report is missing %q:\n%s", expected, stdout)
+		}
+	}
+	if strings.Contains(stdout, "MITCH-GIT-") {
+		t.Errorf("git matches Vault, so there must be no git findings:\n%s", stdout)
+	}
+	if !strings.Contains(stderr, "files_read=1") {
+		t.Errorf("expected the files read in the log:\n%s", stderr)
+	}
+}
+
+func TestReportWithRepoFindsDrift(t *testing.T) {
+	path := testDatabase(t)
+	runForTest("init")
+	// Vault has "admin" reading old-kv/*; git has nothing.
+	saveTestScan(t, path, time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC), inventoryWithMissingMountPolicy())
+	folder := t.TempDir()
+
+	exitCode, stdout, stderr := runForTest("report", "--repo", folder, "--format", "json", "--fail-on", "medium")
+	if exitCode != exitcode.FindingsAboveThreshold {
+		t.Fatalf("expected exit %d, got %d\nstderr: %s", exitcode.FindingsAboveThreshold, exitCode, stderr)
+	}
+	var built report.Report
+	err := json.Unmarshal([]byte(stdout), &built)
+	if err != nil {
+		t.Fatalf("the JSON report does not parse: %v\n%s", err, stdout)
+	}
+	if !built.Git.RepoGiven || built.Git.FilesRead != 0 || len(built.Findings) != 2 || built.Findings[0].Rule != "MITCH-GIT-004" {
+		t.Errorf("expected MITCH-GIT-004 for the policy not in git, got git %+v findings %+v", built.Git, built.Findings)
+	}
+	if !strings.Contains(stderr, "holds no .tf or .tf.json files") {
+		t.Errorf("an empty checkout must be warned about:\n%s", stderr)
+	}
+}
+
+func TestReportRepoErrors(t *testing.T) {
+	testDatabase(t)
+
+	// A wrong path is a usage error, reported before the database is opened.
+	missing := filepath.Join(t.TempDir(), "missing")
+	exitCode, _, stderr := runForTest("report", "--repo", missing)
+	if exitCode != exitcode.UsageError || !strings.Contains(stderr, "mitch report: --repo") {
+		t.Errorf("missing --repo folder: exit %d, want %d\n%s", exitCode, exitcode.UsageError, stderr)
+	}
+
+	// A broken Terraform file fails loudly, naming the file and line.
+	broken := t.TempDir()
+	err := os.WriteFile(filepath.Join(broken, "main.tf"), []byte("resource \"vault_policy\" \"x\" {\n"), 0o600)
+	if err != nil {
+		t.Fatalf("writing main.tf failed: %v", err)
+	}
+	exitCode, _, stderr = runForTest("report", "--repo", broken)
+	if exitCode != exitcode.GeneralError || !strings.Contains(stderr, "reading the Terraform in --repo failed") || !strings.Contains(stderr, "main.tf:") {
+		t.Errorf("broken main.tf: exit %d, want %d\n%s", exitCode, exitcode.GeneralError, stderr)
+	}
+	if strings.Contains(stderr, "cannot open the database") {
+		t.Errorf("--repo must be checked before the database is opened:\n%s", stderr)
 	}
 }
 

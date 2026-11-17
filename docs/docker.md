@@ -1,6 +1,6 @@
 ---
 title: Running Mitch in Docker
-weight: 8
+weight: 9
 ---
 
 The Mitch image is small and locked down. It is built on [distroless static (Debian 13)](https://github.com/GoogleContainerTools/distroless): it has no shell and no package manager, it has the CA certificates needed for TLS to Vault, and it runs as the `nonroot` user. The image works on Apple Silicon (arm64) and Intel (amd64).

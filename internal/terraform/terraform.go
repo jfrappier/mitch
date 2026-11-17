@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jfrappier/mitch/internal/builtin"
 	"github.com/jfrappier/mitch/internal/scan"
 )
 
@@ -33,22 +34,6 @@ const (
 	fileImports    = "imports.tf"
 	policyFolder   = "policies"
 )
-
-// Mounts that Vault creates itself and that cannot be enabled, disabled or
-// moved, so Terraform must not manage them.
-// This is Vault's own "protectedMounts" list (vault/mount.go). Vault 2.x adds
-// agent-registry/, which every Vault 2.x server has.
-// Source: https://github.com/hashicorp/vault/blob/main/vault/mount.go
-// Docs: https://developer.hashicorp.com/vault/docs/secrets/cubbyhole and
-// https://developer.hashicorp.com/vault/docs/secrets/identity
-var builtInSecretsEngines = map[string]bool{"sys/": true, "identity/": true, "cubbyhole/": true, "agent-registry/": true}
-
-// builtInAuthMethods are auth methods Vault creates itself.
-var builtInAuthMethods = map[string]bool{"token/": true}
-
-// rootPolicyName is the built-in policy that cannot be changed, so it is skipped.
-// Docs: https://developer.hashicorp.com/vault/docs/concepts/policies#root-policy
-const rootPolicyName = "root"
 
 // Result is the generated configuration.
 type Result struct {
@@ -238,7 +223,7 @@ func (g *generator) writeNamespace(fullPath string) {
 // writeSecretsEngine writes a vault_mount.
 // Docs: https://registry.terraform.io/providers/hashicorp/vault/latest/docs/resources/mount
 func (g *generator) writeSecretsEngine(namespace string, mount scan.Mount) {
-	if builtInSecretsEngines[mount.Path] {
+	if builtin.IsSecretsEngine(mount.Path) {
 		return
 	}
 	mountPath := strings.TrimSuffix(mount.Path, "/")
@@ -297,7 +282,7 @@ func (g *generator) writeSecretsEngine(namespace string, mount scan.Mount) {
 // or OIDC configuration, have their own resources and are not written.
 // Docs: https://registry.terraform.io/providers/hashicorp/vault/latest/docs/resources/auth_backend
 func (g *generator) writeAuthMethod(namespace string, mount scan.Mount) {
-	if builtInAuthMethods[mount.Path] {
+	if builtin.IsAuthMethod(mount.Path) {
 		return
 	}
 	mountPath := strings.TrimSuffix(mount.Path, "/")
@@ -357,7 +342,7 @@ func (g *generator) writeAuthMethod(namespace string, mount scan.Mount) {
 // so policies can be reviewed in git as policy files.
 // Docs: https://registry.terraform.io/providers/hashicorp/vault/latest/docs/resources/policy
 func (g *generator) writePolicy(namespace string, policy scan.Policy) error {
-	if policy.Name == rootPolicyName {
+	if policy.Name == builtin.RootPolicy {
 		return nil
 	}
 

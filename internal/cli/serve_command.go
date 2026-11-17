@@ -31,12 +31,16 @@ var stopSignalContext = func() (context.Context, context.CancelFunc) {
 
 // runServe starts the read-only web UI over the saved scans.
 //
-//	mitch serve [--listen ADDRESS:PORT] [--db PATH] [--passphrase-file FILE]
+//	mitch serve [--listen ADDRESS:PORT] [--repo PATH] [--db PATH] [--passphrase-file FILE]
+//
+// --repo is read once, at startup. Restart "mitch serve" to pick up new
+// commits in the checkout.
 func runServe(runContext runContext, arguments []string) int {
 	flags := flag.NewFlagSet("mitch serve", flag.ContinueOnError)
 	flags.SetOutput(runContext.stderr)
 	databaseFlags := addStoreFlags(flags)
 	listenAddress := flags.String("listen", defaultListenAddress, "address and port to listen on; anything other than 127.0.0.1 or ::1 can be reached from other machines")
+	repoPath := flags.String("repo", "", repoFlagUsage+". Read once at startup")
 
 	exitCode, parsed := parseCommandFlags(runContext, flags, arguments)
 	if !parsed {
@@ -48,6 +52,10 @@ func runServe(runContext runContext, arguments []string) int {
 	if err != nil {
 		fmt.Fprintf(runContext.stderr, "mitch serve: --listen %q is not ADDRESS:PORT: %v\n", *listenAddress, err)
 		return exitcode.UsageError
+	}
+	repo, exitCode, read := readRepoFlag(runContext, "mitch serve", *repoPath)
+	if !read {
+		return exitCode
 	}
 
 	serveLogger := logging.ForComponent(runContext.logger, "serve")
@@ -68,7 +76,7 @@ func runServe(runContext runContext, arguments []string) int {
 		serveLogger.Error("cannot make an access token", logging.FieldOperation, "serve", logging.FieldError, err.Error())
 		return exitcode.GeneralError
 	}
-	server, err := web.NewServer(opened, runContext.logger, accessToken)
+	server, err := web.NewServer(opened, runContext.logger, accessToken, repo)
 	if err != nil {
 		serveLogger.Error("cannot set up the web UI", logging.FieldOperation, "serve", logging.FieldError, err.Error())
 		return exitcode.GeneralError

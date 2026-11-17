@@ -12,6 +12,7 @@ Mitch scans a HashiCorp Vault cluster, read-only, and saves an encrypted invento
 | 2 | [Scanning Vault](scanning.md) | Load Mitch's Vault policy, create a token, and run `mitch scan`. |
 | 3 | [Reports](reports.md) | Summarize a scan with `mitch report`. |
 | 4 | [Policy findings](findings.md) | Find risky ACL policies, and fail CI with `mitch report --fail-on`. |
+| 5 | [Comparing with git](git-drift.md) | Check that Vault matches your Terraform with `mitch report --repo`. |
 
 ## Use your scans
 
