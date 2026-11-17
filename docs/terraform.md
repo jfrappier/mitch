@@ -77,6 +77,8 @@ Files are created readable only by you (`0600`), and folders `0700`. They descri
 
 Each namespace gets its own provider alias with `namespace` set, and every resource in that namespace uses it. Import IDs are then plain paths, which is how the provider documents [importing namespaced resources](https://registry.terraform.io/providers/hashicorp/vault/latest/docs#importing-namespaced-resources). A namespace itself is created with its parent's provider.
 
+> **Untested:** Mitch's CI runs `terraform plan` against Vault Community, which has no namespaces, so the namespace aliases have not been tested against Vault Enterprise yet. Run `terraform plan` and read it before you apply. If the plan shows anything other than imports, please open an issue.
+
 ### What is left out
 
 - **Secret values, always.** Importing KV secrets would copy their values into Terraform state.

@@ -75,7 +75,8 @@ When more than one path block matches a request, Mitch picks the winner with Vau
 - **Mitch's own sudo add-on is flagged, on purpose.** If you loaded it, it gets three MITCH-POL-004 (medium) findings, one per root-protected path it needs. Mitch's base and KV policies get none.
 - **The `root` policy is skipped.** Vault does not return its text. The `default` policy is checked like any other, because people edit it.
 - **Sentinel policies** (Enterprise) are not read in v1.
-- **Not built yet:** whether a glob on a mount root is broader than the folders in it (this needs folder names, which Mitch never stores), and the "no git repository" finding, which comes with the planned `--repo` option. See [design-decisions.md](design-decisions.md#git-as-the-source-of-truth).
+- **No folder-level suggestions.** Mitch does not suggest replacing a glob such as `secret/data/*` with the exact folders in use, because that needs folder names, and Mitch never stores them (see [design-decisions.md](design-decisions.md#kv-secrets-are-counted-not-named)).
+- **Not built yet:** the "no git repository" finding, which comes with the planned `--repo` option. See [design-decisions.md](design-decisions.md#git-as-the-source-of-truth).
 
 ## JSON fields
 
