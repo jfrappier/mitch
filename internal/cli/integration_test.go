@@ -616,3 +616,76 @@ func TestReportOnARealScan(t *testing.T) {
 		t.Errorf("the report does not match the scan: %+v", built.Summary)
 	}
 }
+
+// TestFindingsOnARealScan writes risky policies into a real Vault, scans,
+// and checks that Mitch reads them the way Vault stored them. Vault rejects
+// a policy it cannot parse, so these also prove Mitch's parser accepts what
+// Vault accepts.
+func TestFindingsOnARealScan(t *testing.T) {
+	vault := setUpVault(t)
+	riskyPolicies := map[string]string{
+		"mitch-findings-root-like": `path "*" { capabilities = ["read", "sudo"] }`,
+		"mitch-findings-escalates": "path \"sys/policies/acl/*\" {\n  capabilities = [\"create\", \"update\"]\n}\n",
+		"mitch-findings-shorthand": `{"path": {"mitch-findings-gone/*": {"policy": "write"}}}`,
+	}
+	for name, text := range riskyPolicies {
+		err := vault.root.Sys().PutPolicy(name, text)
+		if err != nil {
+			t.Fatalf("writing the %s policy failed: %v", name, err)
+		}
+	}
+	token := vault.createToken(t, checks.BasePolicyName)
+	testDatabase(t)
+
+	exitCode, _, stderr := runForTest("init")
+	if exitCode != exitcode.Success {
+		t.Fatalf("init failed: exit %d\nstderr: %s", exitCode, stderr)
+	}
+	t.Setenv("VAULT_ADDR", vault.address)
+	t.Setenv("VAULT_TOKEN", token)
+	t.Setenv("VAULT_NAMESPACE", "")
+	// The base policy alone leaves KV counting partial, which is fine here.
+	exitCode, _, stderr = runForTest("scan", "--kv=false")
+	if exitCode != exitcode.Success {
+		t.Fatalf("scan failed: exit %d\nstderr: %s", exitCode, stderr)
+	}
+
+	outputPath := filepath.Join(t.TempDir(), "report.json")
+	exitCode, _, stderr = runForTest("report", "--output", outputPath, "--fail-on", "critical")
+	if exitCode != exitcode.FindingsAboveThreshold {
+		t.Fatalf("expected exit %d for a root-like policy, got %d\nstderr: %s", exitcode.FindingsAboveThreshold, exitCode, stderr)
+	}
+
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("reading the report file failed: %v", err)
+	}
+	var built report.Report
+	err = json.Unmarshal(content, &built)
+	if err != nil {
+		t.Fatalf("the report file is not JSON: %v", err)
+	}
+	if len(built.PoliciesNotAnalyzed) != 0 {
+		t.Errorf("every policy Vault accepted must parse: %+v", built.PoliciesNotAnalyzed)
+	}
+	expected := map[string]string{
+		"mitch-findings-root-like": "MITCH-POL-001",
+		"mitch-findings-escalates": "MITCH-POL-005",
+		"mitch-findings-shorthand": "MITCH-POL-007",
+	}
+	for policy, rule := range expected {
+		if !hasFinding(built, policy, rule) {
+			t.Errorf("expected %s on %s, got %+v", rule, policy, built.Findings)
+		}
+	}
+}
+
+// hasFinding reports whether the report has a finding for a rule on a policy.
+func hasFinding(built report.Report, policy string, rule string) bool {
+	for _, finding := range built.Findings {
+		if finding.Policy == policy && finding.Rule == rule {
+			return true
+		}
+	}
+	return false
+}

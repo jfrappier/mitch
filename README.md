@@ -21,7 +21,7 @@
 People often ask how to run reports in Vault, but Vault is not a CMDB or an inventory tool. Mitch scans a Vault cluster and saves what it finds, encrypted, so you can answer questions like "how many secrets do we have?", "which plugins were installed by hand?" and "what changed since last week?"
 
 > [!NOTE]
-> **Early development.** Everything below works today except policy findings, which are not built yet. There is no published release or image yet; build from this repository.
+> **Early development.** Everything below works today. There is no published release or image yet; build from this repository.
 
 ## What Mitch does
 
@@ -29,6 +29,7 @@ People often ask how to run reports in Vault, but Vault is not a CMDB or an inve
 | --- | --- |
 | **Scan** | Secrets engines, auth methods, plugins (built in or registered by hand), server configuration, audit devices, namespaces (Enterprise), ACL policies, and KV secret counts. |
 | **Report** | A summary of one scan, in the terminal as Markdown, or saved as Markdown or JSON. |
+| **Findings** | Risky ACL policies, such as root-equivalent grants, write access to policies or mounts, and denies that do not block what they seem to. `--fail-on` fails a CI job on them. |
 | **Diff** | What changed between two saved scans. |
 | **Terraform** | Writes Terraform, with import blocks, so Terraform can adopt your existing Vault setup. |
 | **Web UI** | Browse scans, reports and changes in a local, read-only web page. |

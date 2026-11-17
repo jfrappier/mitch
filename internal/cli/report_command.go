@@ -5,15 +5,20 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"strings"
 
 	"github.com/jfrappier/mitch/internal/exitcode"
+	"github.com/jfrappier/mitch/internal/findings"
 	"github.com/jfrappier/mitch/internal/logging"
 	"github.com/jfrappier/mitch/internal/report"
 )
 
 // runReport summarizes one saved scan. With no --scan it uses the newest one.
 //
-//	mitch report [--scan ID] [--format markdown|json] [--output FILE.md|FILE.json] [--db PATH] [--passphrase-file FILE]
+//	mitch report [--scan ID] [--format markdown|json] [--output FILE.md|FILE.json] [--fail-on SEVERITY] [--db PATH] [--passphrase-file FILE]
+//
+// With --fail-on, it exits with code 4 when any policy finding is at or
+// above that severity, so a CI job can fail on it.
 func runReport(runContext runContext, arguments []string) int {
 	flags := flag.NewFlagSet("mitch report", flag.ContinueOnError)
 	flags.SetOutput(runContext.stderr)
@@ -21,6 +26,7 @@ func runReport(runContext runContext, arguments []string) int {
 	scanID := flags.String("scan", "", `id of the saved scan (see "mitch history"); default: the newest scan`)
 	format := flags.String("format", formatMarkdown, "what to print in the terminal: markdown or json")
 	outputPath := flags.String("output", "", "also save the report to this file; .md saves Markdown, .json saves JSON")
+	failOn := flags.String("fail-on", "", "exit with code 4 when any policy finding is at or above this severity: "+strings.Join(findings.Severities(), ", ")+"; default: never")
 
 	exitCode, parsed := parseCommandFlags(runContext, flags, arguments)
 	if !parsed {
@@ -31,6 +37,10 @@ func runReport(runContext runContext, arguments []string) int {
 	err := checkOutputFlags(*format, *outputPath)
 	if err != nil {
 		fmt.Fprintf(runContext.stderr, "mitch report: %v\n", err)
+		return exitcode.UsageError
+	}
+	if *failOn != "" && !findings.IsSeverity(*failOn) {
+		fmt.Fprintf(runContext.stderr, "mitch report: --fail-on %q is not a severity; use one of: %s\n", *failOn, strings.Join(findings.Severities(), ", "))
 		return exitcode.UsageError
 	}
 
@@ -84,6 +94,28 @@ func runReport(runContext runContext, arguments []string) int {
 			"scan_id", *scanID,
 			"skipped_checks", len(built.Skipped),
 		)
+	}
+	if len(built.PoliciesNotAnalyzed) > 0 {
+		reportLogger.Warn("some policies could not be parsed, so they were not checked for findings; see \"Policy findings\"",
+			logging.FieldOperation, "report",
+			"scan_id", *scanID,
+			"policies_not_analyzed", len(built.PoliciesNotAnalyzed),
+		)
+	}
+
+	// Step 4: with --fail-on, fail when a finding is serious enough.
+	if *failOn != "" {
+		count := built.CountFindingsAtOrAbove(*failOn)
+		if count > 0 {
+			reportLogger.Error("policy findings at or above the --fail-on severity",
+				logging.FieldOperation, "fail_on",
+				"scan_id", *scanID,
+				"fail_on", *failOn,
+				"findings", count,
+				"exit_code", exitcode.FindingsAboveThreshold,
+			)
+			return exitcode.FindingsAboveThreshold
+		}
 	}
 	return exitcode.Success
 }

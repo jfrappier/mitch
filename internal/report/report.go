@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jfrappier/mitch/internal/findings"
 	"github.com/jfrappier/mitch/internal/scan"
 )
 
@@ -48,6 +49,16 @@ type Report struct {
 	AuditDevices []AuditRow `json:"audit_devices"`
 
 	VersionHistory []scan.VersionHistoryEntry `json:"version_history"`
+
+	// Findings are policy problems, most serious first. They are worked out
+	// from the saved scan each time a report is built; they are never stored.
+	// The namespace of each finding uses the same "(root)" label as above.
+	Findings []findings.Finding `json:"findings"`
+	// PoliciesNotAnalyzed are policies Mitch could not parse, with the reason.
+	PoliciesNotAnalyzed []findings.NotAnalyzed `json:"policies_not_analyzed"`
+	// UnknownMountCheckSkipped lists namespaces where rule MITCH-POL-007 did
+	// not run, because the scan could not list the mounts there.
+	UnknownMountCheckSkipped []string `json:"unknown_mount_check_skipped"`
 
 	// Skipped and NotRequested explain what the scan could not read, or
 	// left out on purpose. Counts above leave these parts out.
@@ -89,6 +100,17 @@ type Summary struct {
 	Deprecated        int `json:"deprecated"`
 
 	SkippedChecks int `json:"skipped_checks"`
+
+	// Findings counts policy findings by severity.
+	Findings FindingCounts `json:"findings"`
+}
+
+// FindingCounts is how many findings there are at each severity.
+type FindingCounts struct {
+	Critical int `json:"critical"`
+	High     int `json:"high"`
+	Medium   int `json:"medium"`
+	Low      int `json:"low"`
 }
 
 // TypeCount is how many items of one type there are.
@@ -191,6 +213,7 @@ func Build(scanID string, inventory scan.Inventory) Report {
 	addNamespaces(&built, inventory.Namespaces)
 	addPlugins(&built, inventory.Plugins)
 	addAuditDevices(&built, inventory.AuditDevices)
+	addFindings(&built, findings.Analyze(inventory))
 
 	built.MountTypes = countMountTypes(built.SecretsEngines, built.AuthMethods)
 	built.Summary.Namespaces = len(inventory.Namespaces)
@@ -311,6 +334,51 @@ func addAuditDevices(built *Report, devices []scan.AuditDevice) {
 	for _, device := range devices {
 		built.AuditDevices = append(built.AuditDevices, AuditRow{Path: device.Path, Type: device.Type, Description: device.Description})
 	}
+}
+
+// addFindings copies the policy findings into the report and counts them by
+// severity. Namespaces are relabeled so root shows as "(root)", like the rest
+// of the report.
+func addFindings(built *Report, analyzed findings.Result) {
+	built.Findings = []findings.Finding{}
+	for _, finding := range analyzed.Findings {
+		finding.Namespace = namespaceLabel(finding.Namespace)
+		built.Findings = append(built.Findings, finding)
+
+		switch finding.Severity {
+		case findings.SeverityCritical:
+			built.Summary.Findings.Critical++
+		case findings.SeverityHigh:
+			built.Summary.Findings.High++
+		case findings.SeverityMedium:
+			built.Summary.Findings.Medium++
+		case findings.SeverityLow:
+			built.Summary.Findings.Low++
+		}
+	}
+
+	built.PoliciesNotAnalyzed = []findings.NotAnalyzed{}
+	for _, notAnalyzed := range analyzed.NotAnalyzed {
+		notAnalyzed.Namespace = namespaceLabel(notAnalyzed.Namespace)
+		built.PoliciesNotAnalyzed = append(built.PoliciesNotAnalyzed, notAnalyzed)
+	}
+
+	built.UnknownMountCheckSkipped = []string{}
+	for _, namespace := range analyzed.UnknownMountCheckSkipped {
+		built.UnknownMountCheckSkipped = append(built.UnknownMountCheckSkipped, namespaceLabel(namespace))
+	}
+}
+
+// CountFindingsAtOrAbove counts findings at or above a severity. It is what
+// "mitch report --fail-on" checks.
+func (r Report) CountFindingsAtOrAbove(threshold string) int {
+	count := 0
+	for _, finding := range r.Findings {
+		if findings.AtOrAbove(finding.Severity, threshold) {
+			count++
+		}
+	}
+	return count
 }
 
 // addMountDeprecation records a mount whose plugin is deprecated.

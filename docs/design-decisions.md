@@ -38,6 +38,15 @@ Each decision below says what was chosen, why, and what it means for you as a us
 
 **Decision:** Mitch recommends that all Vault policies live in git as HCL files used by Terraform, and that all Vault configuration is Terraform. You point Mitch at a local checkout; Mitch never clones or holds git credentials.
 **Impact:** Without a repository, every report contains one high-severity finding saying Vault config can't be confirmed as managed as code. With a repository, Mitch reports drift between git and the live Vault.
+**Status:** The repository option and this finding are not built yet. The finding ships together with `--repo`, so that `mitch report --fail-on high` never fails on a finding you have no way to clear.
+
+## Policy findings parsed the way Vault parses them
+
+**Decision:** Mitch parses ACL policies with HCL v1, the library and version Vault itself uses, and applies Vault's path priority rules. HCL v2 is kept for later, for comparing Terraform in a git repository with the live Vault. Findings are computed from the saved scan each time, never stored. See [findings.md](findings.md).
+**Impact:** A finding describes what Vault actually enforces, including old `policy = "write"` shorthand and JSON policies. Upgrading Mitch improves findings on scans you already saved.
+
+**Decision:** Findings have four severities: critical, high, medium, low. They only change the exit code when you ask, with `mitch report --fail-on SEVERITY` (exit code 4).
+**Impact:** Adding findings did not break existing scripts. In CI, pick the lowest severity you want to block on.
 
 ## Sudo is opt-in
 

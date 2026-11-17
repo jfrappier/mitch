@@ -190,7 +190,7 @@ func TestReportPage(t *testing.T) {
 	if response.StatusCode != http.StatusOK {
 		t.Fatalf("HTTP %d:\n%s", response.StatusCode, body)
 	}
-	for _, expected := range []string{"Scan new2", "Vault 2.2.2", "added/", "<td>(root)</td>", "Not collected"} {
+	for _, expected := range []string{"Scan new2", "Vault 2.2.2", "added/", "<td>(root)</td>", "Not collected", "Policy findings", "0 critical, 0 high, 0 medium, 0 low"} {
 		if !strings.Contains(body, expected) {
 			t.Errorf("report is missing %q:\n%s", expected, body)
 		}
@@ -201,6 +201,27 @@ func TestReportPage(t *testing.T) {
 	}
 	if !strings.Contains(body, "&lt;script&gt;") {
 		t.Errorf("the escaped description is missing:\n%s", body)
+	}
+}
+
+func TestReportPageShowsFindings(t *testing.T) {
+	scans := newFakeScans()
+	risky := scans.inventories["new2"]
+	risky.Namespaces = []scan.NamespaceInventory{{
+		Path:        "",
+		ACLPolicies: []scan.Policy{{Name: "admin", Text: "path \"*\" {\n  capabilities = [\"read\", \"sudo\"]\n}"}, {Name: "broken", Text: "path {"}},
+	}}
+	scans.inventories["risky"] = risky
+	testServer := newTestServer(t, scans)
+
+	response, body := get(t, testServer, "/scans/risky", true)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("HTTP %d:\n%s", response.StatusCode, body)
+	}
+	for _, expected := range []string{"1 critical, 0 high", "<td>critical</td><td>MITCH-POL-001</td>", "<td>broken</td>", "could not be parsed"} {
+		if !strings.Contains(body, expected) {
+			t.Errorf("report is missing %q:\n%s", expected, body)
+		}
 	}
 }
 

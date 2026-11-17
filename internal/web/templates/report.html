@@ -20,8 +20,29 @@
 <tr><th>Plugins</th><td>{{.Summary.BuiltinPlugins}} built in, {{.Summary.RegisteredPlugins}} registered by hand</td></tr>
 <tr><th>Deprecated</th><td>{{.Summary.Deprecated}}</td></tr>
 <tr><th>Skipped checks</th><td>{{.Summary.SkippedChecks}}</td></tr>
+<tr><th>Policy findings</th><td>{{.Summary.Findings.Critical}} critical, {{.Summary.Findings.High}} high, {{.Summary.Findings.Medium}} medium, {{.Summary.Findings.Low}} low</td></tr>
 </tbody>
 </table></div>
+
+<h2 id="findings">Policy findings</h2>
+{{if .Findings}}
+<div class="table-wrap"><table>
+<thead><tr><th>Severity</th><th>Rule</th><th>Namespace</th><th>Policy</th><th>Path</th><th>Line</th><th>Finding</th><th>Suggestion</th></tr></thead>
+<tbody>{{range .Findings}}<tr><td>{{.Severity}}</td><td>{{.Rule}}</td><td>{{.Namespace}}</td><td>{{.Policy}}</td><td><code>{{.Path}}</code></td><td>{{.Line}}</td><td>{{.Message}}</td><td>{{.Suggestion}}</td></tr>{{end}}</tbody>
+</table></div>
+{{else}}
+<p>None found.</p>
+{{end}}
+{{if .PoliciesNotAnalyzed}}
+<p class="error">These policies could not be parsed, so they were not checked:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Namespace</th><th>Policy</th><th>Reason</th></tr></thead>
+<tbody>{{range .PoliciesNotAnalyzed}}<tr><td>{{.Namespace}}</td><td>{{.Policy}}</td><td>{{.Reason}}</td></tr>{{end}}</tbody>
+</table></div>
+{{end}}
+{{if .UnknownMountCheckSkipped}}
+<p>Paths to missing mounts (MITCH-POL-007) were not checked in {{range $index, $namespace := .UnknownMountCheckSkipped}}{{if $index}}, {{end}}{{$namespace}}{{end}}, because the scan could not list the mounts there.</p>
+{{end}}
 
 {{if .Deprecated}}
 <h2>Deprecated</h2>

@@ -17,6 +17,7 @@ func WriteMarkdown(output io.Writer, built Report) error {
 	writeHeader(text, built)
 	writeSummary(text, built)
 	writeGaps(text, built)
+	writeFindings(text, built)
 	writeMountTypes(text, built)
 	writeMounts(text, "Secrets engines", built.SecretsEngines)
 	writeMounts(text, "Auth methods", built.AuthMethods)
@@ -72,6 +73,8 @@ func writeSummary(text *strings.Builder, built Report) {
 		[]string{"Plugins (built-in / registered)", fmt.Sprintf("%d / %d", summary.BuiltinPlugins, summary.RegisteredPlugins)},
 		[]string{"Deprecated mounts and registered plugins", fmt.Sprint(summary.Deprecated)},
 		[]string{"Skipped checks", fmt.Sprint(summary.SkippedChecks)},
+		[]string{"Policy findings (critical / high / medium / low)", fmt.Sprintf("%d / %d / %d / %d",
+			summary.Findings.Critical, summary.Findings.High, summary.Findings.Medium, summary.Findings.Low)},
 	)
 	writeTable(text, []string{"Item", "Count"}, rows)
 }
@@ -107,6 +110,39 @@ func writeGaps(text *strings.Builder, built Report) {
 			rows = append(rows, []string{notRequested.Check, notRequested.Reason})
 		}
 		writeTable(text, []string{"Check", "Reason"}, rows)
+	}
+}
+
+// writeFindings lists policy findings, most serious first, then any policy
+// Mitch could not check, so a clean list is never mistaken for a full check.
+func writeFindings(text *strings.Builder, built Report) {
+	fmt.Fprintf(text, "\n## Policy findings\n\n")
+	fmt.Fprintf(text, "Rules and fixes are explained in docs/findings.md.\n\n")
+	if len(built.Findings) == 0 {
+		fmt.Fprintf(text, "None found.\n")
+	} else {
+		rows := [][]string{}
+		for _, finding := range built.Findings {
+			rows = append(rows, []string{
+				finding.Severity, finding.Rule, finding.Namespace, finding.Policy,
+				finding.Path, fmt.Sprint(finding.Line), finding.Message, finding.Suggestion,
+			})
+		}
+		writeTable(text, []string{"Severity", "Rule", "Namespace", "Policy", "Path", "Line", "Finding", "Suggestion"}, rows)
+	}
+
+	if len(built.PoliciesNotAnalyzed) > 0 {
+		fmt.Fprintf(text, "\nThese policies could not be parsed, so they were not checked:\n\n")
+		rows := [][]string{}
+		for _, notAnalyzed := range built.PoliciesNotAnalyzed {
+			rows = append(rows, []string{notAnalyzed.Namespace, notAnalyzed.Policy, notAnalyzed.Reason})
+		}
+		writeTable(text, []string{"Namespace", "Policy", "Reason"}, rows)
+	}
+
+	if len(built.UnknownMountCheckSkipped) > 0 {
+		fmt.Fprintf(text, "\nPaths to missing mounts (MITCH-POL-007) were not checked in these namespaces, because the scan could not list their mounts: %s\n",
+			strings.Join(built.UnknownMountCheckSkipped, ", "))
 	}
 }
 
