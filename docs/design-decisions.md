@@ -38,7 +38,7 @@ Each decision below says what was chosen, why, and what it means for you as a us
 ## Git as the source of truth
 
 **Decision:** Mitch recommends that all Vault policies live in git as HCL files used by Terraform, and that all Vault configuration is Terraform. You point Mitch at a local checkout; Mitch never clones or holds git credentials.
-**Impact:** Without a repository, every report contains one high-severity finding saying Vault config can't be confirmed as managed as code. With a repository, Mitch reports drift between git and the live Vault.
+**Impact:** Without a repository, every report contains one high-severity finding saying Vault config can't be confirmed as managed as code. `--fail-on` never counts it, because CI often cannot reach the repository where Terraform is kept. With a repository, Mitch reports drift between git and the live Vault.
 **Decision:** Mitch reads the Terraform with HCL v2, the library Terraform uses, and works out only what it can without running Terraform. Variables, module inputs, `count` and `for_each` are listed as "not checked", never as drift. Drift is computed each time a report is built, never stored. See [Comparing with git](git-drift.md).
 **Impact:** `mitch report --repo` needs no Terraform binary, state, cloud credentials or Vault token. A resource built from variables is not compared, and its kind is not reported as "not in git" where it could be the missing object, so check the "Not checked" list.
 

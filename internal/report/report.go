@@ -453,9 +453,17 @@ func sortBySeverity(found []findings.Finding) {
 
 // CountFindingsAtOrAbove counts findings, policy and git, at or above a
 // severity. It is what "mitch report --fail-on" checks.
+//
+// The "no git repository" finding (MITCH-GIT-001) is never counted. A CI
+// job often cannot reach the repository where a team keeps its Terraform,
+// so a report without --repo must still be able to pass --fail-on. The
+// finding stays in the report, so nobody mistakes "passed" for "checked".
 func (r Report) CountFindingsAtOrAbove(threshold string) int {
 	count := 0
 	for _, finding := range r.Findings {
+		if finding.Rule == drift.RuleNoRepo {
+			continue
+		}
 		if findings.AtOrAbove(finding.Severity, threshold) {
 			count++
 		}

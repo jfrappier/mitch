@@ -263,7 +263,8 @@ func TestBuildFindings(t *testing.T) {
 	if !reflect.DeepEqual(built.UnknownMountCheckSkipped, []string{"team-a/"}) {
 		t.Errorf("expected the missing-mount check skipped in team-a/, got %v", built.UnknownMountCheckSkipped)
 	}
-	if built.CountFindingsAtOrAbove("critical") != 1 || built.CountFindingsAtOrAbove("low") != 2 {
+	// MITCH-GIT-001 is in the report but never counted for --fail-on.
+	if built.CountFindingsAtOrAbove("critical") != 1 || built.CountFindingsAtOrAbove("high") != 1 || built.CountFindingsAtOrAbove("low") != 1 {
 		t.Errorf("CountFindingsAtOrAbove is wrong for %+v", built.Findings)
 	}
 

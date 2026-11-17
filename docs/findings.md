@@ -21,7 +21,7 @@ The **Findings** section lists each finding, most serious first, with its rule, 
 mitch report --fail-on high
 ```
 
-The report prints as usual. If any finding is at or above `high`, including the git findings from [Comparing with git](git-drift.md), Mitch logs an error with the count and exits with code 4 (see [Exit codes](exit-codes.md)). Without `--fail-on`, findings never change the exit code.
+The report prints as usual. If any finding is at or above `high`, including the git findings from [Comparing with git](git-drift.md), Mitch logs an error with the count and exits with code 4 (see [Exit codes](exit-codes.md)). Without `--fail-on`, findings never change the exit code. The "no git repository" finding (MITCH-GIT-001) is never counted, so a CI job that cannot reach your Terraform repository can still pass.
 
 `--fail-on` takes `critical`, `high`, `medium` or `low`. Any other value fails with exit code 2 before the passphrase is read.
 

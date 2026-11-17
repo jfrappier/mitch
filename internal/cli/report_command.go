@@ -19,7 +19,8 @@ import (
 //
 // With --repo, it compares the scan with the Terraform in that local git
 // checkout. With --fail-on, it exits with code 4 when any finding, policy or
-// git, is at or above that severity, so a CI job can fail on it.
+// git, is at or above that severity, so a CI job can fail on it. The "no git
+// repository" finding is never counted, so CI without --repo can still pass.
 func runReport(runContext runContext, arguments []string) int {
 	flags := flag.NewFlagSet("mitch report", flag.ContinueOnError)
 	flags.SetOutput(runContext.stderr)
@@ -28,7 +29,7 @@ func runReport(runContext runContext, arguments []string) int {
 	format := flags.String("format", formatMarkdown, "what to print in the terminal: markdown or json")
 	outputPath := flags.String("output", "", "also save the report to this file; .md saves Markdown, .json saves JSON")
 	repoPath := flags.String("repo", "", repoFlagUsage)
-	failOn := flags.String("fail-on", "", "exit with code 4 when any finding is at or above this severity: "+strings.Join(findings.Severities(), ", ")+"; default: never")
+	failOn := flags.String("fail-on", "", "exit with code 4 when any finding (except MITCH-GIT-001, no --repo) is at or above this severity: "+strings.Join(findings.Severities(), ", ")+"; default: never")
 
 	exitCode, parsed := parseCommandFlags(runContext, flags, arguments)
 	if !parsed {

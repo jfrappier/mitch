@@ -158,9 +158,9 @@ func TestReportFailOn(t *testing.T) {
 		failOn    string
 		exitCode  int
 	}{
-		// Without --repo, MITCH-GIT-001 is a high finding, so it counts too.
-		{"no repo, fail on critical", inventoryWithMissingMountPolicy(), "critical", exitcode.Success},
-		{"no repo, fail on high", inventoryWithMissingMountPolicy(), "high", exitcode.FindingsAboveThreshold},
+		// Without --repo, MITCH-GIT-001 (high) is in the report, but
+		// --fail-on never counts it: CI may not be able to reach the repo.
+		{"low finding, no repo, fail on high", inventoryWithMissingMountPolicy(), "high", exitcode.Success},
 		{"low finding, fail on low", inventoryWithMissingMountPolicy(), "low", exitcode.FindingsAboveThreshold},
 		{"critical finding, fail on critical", inventoryWithRootLikePolicy(), "critical", exitcode.FindingsAboveThreshold},
 		{"critical finding, fail on medium", inventoryWithRootLikePolicy(), "medium", exitcode.FindingsAboveThreshold},

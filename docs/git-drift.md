@@ -27,13 +27,13 @@ Run this from the checkout in CI. Every git rule below is `medium` or higher, ex
 
 ## Without --repo
 
-Every report without `--repo` gets exactly one high finding, MITCH-GIT-001, in namespace `(all)`. It says Mitch cannot confirm that Vault is managed as code. It is reported once, not per policy or mount, and it does not change any other finding. `mitch report --fail-on high` therefore fails without `--repo`. The reason is in [Design decisions](design-decisions.md#git-as-the-source-of-truth).
+Every report without `--repo` gets exactly one high finding, MITCH-GIT-001, in namespace `(all)`. It says Mitch cannot confirm that Vault is managed as code. It is reported once, not per policy or mount, and it does not change any other finding. `--fail-on` never counts it, because a CI job often cannot reach the repository where a team keeps its Terraform; a report without `--repo` passes or fails on its other findings only. The reason is in [Design decisions](design-decisions.md#git-as-the-source-of-truth).
 
 ## Rules
 
 | Rule | Severity | What it finds |
 | --- | --- | --- |
-| MITCH-GIT-001 | high | No `--repo` was given. |
+| MITCH-GIT-001 | high | No `--repo` was given. Never counted by `--fail-on`. |
 | MITCH-GIT-002 | high | A policy's text in Vault is not the text in git. It was changed outside Terraform, or git has changes not yet applied. |
 | MITCH-GIT-003 | low | A policy differs from git only in spaces or line breaks. `terraform plan` still shows it as a change. |
 | MITCH-GIT-004 | medium | A policy is in Vault, but no `vault_policy` resource in git manages it. |

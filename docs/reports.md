@@ -78,7 +78,7 @@ The file's format comes from its extension: `.json` or `.md`, in any case. Any o
 | `--format markdown\|json` | `markdown` | What the terminal shows. |
 | `--output FILE` | none | Also save to `FILE`: `.json` saves JSON, `.md` saves Markdown. |
 | `--repo PATH` | none | Compare the scan with the Terraform in this local git checkout. See [Comparing with git](git-drift.md). |
-| `--fail-on SEVERITY` | never | Exit with code 4 when any finding, policy or git, is at or above `critical`, `high`, `medium` or `low`. The report still prints. See [Policy findings](findings.md#2-fail-a-ci-job-on-findings). |
+| `--fail-on SEVERITY` | never | Exit with code 4 when any finding, policy or git, is at or above `critical`, `high`, `medium` or `low`. MITCH-GIT-001 (no `--repo`) is never counted. The report still prints. See [Policy findings](findings.md#2-fail-a-ci-job-on-findings). |
 | `--db PATH`, `--passphrase-file FILE` | | See [Saving scans](saving-scans.md). |
 
 ## The output is plain text
