@@ -1,6 +1,7 @@
-[Mitch docs](README.md) › Logging
-
-# Logging
+---
+title: Logging
+weight: 11
+---
 
 Mitch writes every log line in the same format, so people can read it and log tools can parse it without custom rules.
 

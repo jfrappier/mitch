@@ -1,6 +1,7 @@
-[Mitch docs](README.md) › Running Mitch in Docker
-
-# Running Mitch in Docker
+---
+title: Running Mitch in Docker
+weight: 8
+---
 
 The Mitch image is small and locked down. It is built on [distroless static (Debian 13)](https://github.com/GoogleContainerTools/distroless): it has no shell and no package manager, it has the CA certificates needed for TLS to Vault, and it runs as the `nonroot` user. The image works on Apple Silicon (arm64) and Intel (amd64).
 
@@ -28,7 +29,7 @@ docker volume create mitch-data
 docker run --rm -e MITCH_PASSPHRASE -v mitch-data:/data mitch init
 ```
 
-`-e MITCH_PASSPHRASE` with no value passes the variable from your shell, so the passphrase is not typed on the command line or saved in your shell history. Set it from a password manager or secret store. While the container runs, `docker inspect` can still show it to anyone who can run Docker commands on the machine; use a passphrase file if that matters. See [saving-scans.md](saving-scans.md) for passphrase rules.
+`-e MITCH_PASSPHRASE` with no value passes the variable from your shell, so the passphrase is not typed on the command line or saved in your shell history. Set it from a password manager or secret store. While the container runs, `docker inspect` can still show it to anyone who can run Docker commands on the machine; use a passphrase file if that matters. See [Saving scans](saving-scans.md) for passphrase rules.
 
 To use a file instead, mount it read-only and pass `--passphrase-file`:
 
@@ -37,7 +38,7 @@ docker run --rm -v mitch-data:/data -v "$PWD/passphrase:/run/secrets/mitch_passp
   mitch init --passphrase-file /run/secrets/mitch_passphrase
 ```
 
-Mitch refuses a passphrase file that other users can read (see [saving-scans.md](saving-scans.md#passphrase-files)). On Linux, the container reads the file as uid 65532, so give the file to that user and keep it private: `sudo chown 65532 passphrase && sudo chmod 600 passphrase`.
+Mitch refuses a passphrase file that other users can read (see [Saving scans](saving-scans.md#passphrase-files)). On Linux, the container reads the file as uid 65532, so give the file to that user and keep it private: `sudo chown 65532 passphrase && sudo chmod 600 passphrase`.
 
 If you can't change the file's owner or permissions, for example a secret your CI system mounts, add `--allow-insecure-passphrase-file`. Mitch then logs a warning and continues. This flag is meant for CI and other non-interactive runs.
 
@@ -51,7 +52,7 @@ docker run --rm -e MITCH_PASSPHRASE -e VAULT_ADDR -e VAULT_TOKEN -v mitch-data:/
 
 If Vault runs on your Mac (for example a dev server on port 8200), use `VAULT_ADDR=http://host.docker.internal:8200`. On Docker Desktop, [`host.docker.internal`](https://docs.docker.com/desktop/features/networking/networking-how-tos/) reaches your host.
 
-See [scanning.md](scanning.md) for the policy the token needs.
+See [Scanning Vault](scanning.md) for the policy the token needs.
 
 ## 5. Use the results
 
@@ -73,7 +74,7 @@ On Linux, the container writes as uid 65532, so that folder must be writable by 
 
 ## Browse in the web UI
 
-See [web-ui.md](web-ui.md#running-in-docker) for `mitch serve` in a container.
+See [The web UI](web-ui.md#running-in-docker) for `mitch serve` in a container.
 
 ## Build arguments
 

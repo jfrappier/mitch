@@ -1,8 +1,9 @@
-[Mitch docs](README.md) › How Mitch protects your data
+---
+title: How Mitch protects your data
+weight: 9
+---
 
-# How Mitch protects your data
-
-Mitch saves each scan in a local SQLite file, encrypted with a key that only your passphrase can unlock. A stolen database file or a leaked backup is unreadable without the passphrase. To set it up, see [saving-scans.md](saving-scans.md).
+Mitch saves each scan in a local SQLite file, encrypted with a key that only your passphrase can unlock. A stolen database file or a leaked backup is unreadable without the passphrase. To set it up, see [Saving scans](saving-scans.md).
 
 ## What Mitch stores
 
@@ -21,7 +22,7 @@ All of this is encrypted. Only each scan's id and its start, finish and save tim
 
 ## Why path names are sensitive
 
-Vault's own docs warn that key names are not filtered by policy and can contain sensitive information ([KV v2 list](https://developer.hashicorp.com/vault/api-docs/secret/kv/kv-v2#list-secrets)). An inventory of path names is also a map for an attacker. Mitch never records them, and redacts them in logs (see [logging.md](logging.md)).
+Vault's own docs warn that key names are not filtered by policy and can contain sensitive information ([KV v2 list](https://developer.hashicorp.com/vault/api-docs/secret/kv/kv-v2#list-secrets)). An inventory of path names is also a map for an attacker. Mitch never records them, and redacts them in logs (see [Logging](logging.md)).
 
 ## Encryption at rest
 
@@ -41,11 +42,11 @@ flowchart LR
 4. Passphrases must be at least 12 characters. A wrong passphrase is rejected before anything is read.
 5. The passphrase comes from a prompt that does not show what you type, `MITCH_PASSPHRASE`, or `--passphrase-file`. Mitch never writes it to disk or to logs.
 
-The database file is created readable only by its owner (`0600`). Mitch warns you if the database can be read by other users, with the `chmod` command to fix it. It refuses a `--passphrase-file` that other users can read, because that file unlocks everything; `--allow-insecure-passphrase-file` overrides this for CI and non-interactive runs (see [saving-scans.md](saving-scans.md#passphrase-files)).
+The database file is created readable only by its owner (`0600`). Mitch warns you if the database can be read by other users, with the `chmod` command to fix it. It refuses a `--passphrase-file` that other users can read, because that file unlocks everything; `--allow-insecure-passphrase-file` overrides this for CI and non-interactive runs (see [Saving scans](saving-scans.md#passphrase-files)).
 
 ## Changing the passphrase
 
-`mitch passphrase` wraps the same data key again with your new passphrase and a new salt. The saved scans are not re-encrypted, so the change is instant. See [saving-scans.md](saving-scans.md#5-change-the-passphrase).
+`mitch passphrase` wraps the same data key again with your new passphrase and a new salt. The saved scans are not re-encrypted, so the change is instant. See [Saving scans](saving-scans.md#5-change-the-passphrase).
 
 What a change does not do:
 
@@ -58,7 +59,7 @@ If the old passphrase may have leaked together with a copy of the database, chan
 
 ## The web UI
 
-`mitch serve` keeps the database unlocked while it runs, and shows decrypted scans to any browser that has its access token. The token is random (256 bits), new each run, printed only to the terminal, and compared in constant time. Pages are sent with `Cache-Control: no-store` and a Content Security Policy that allows no scripts. The UI uses plain HTTP, so it listens on `127.0.0.1` by default and Mitch warns when it listens anywhere else. See [web-ui.md](web-ui.md).
+`mitch serve` keeps the database unlocked while it runs, and shows decrypted scans to any browser that has its access token. The token is random (256 bits), new each run, printed only to the terminal, and compared in constant time. Pages are sent with `Cache-Control: no-store` and a Content Security Policy that allows no scripts. The UI uses plain HTTP, so it listens on `127.0.0.1` by default and Mitch warns when it listens anywhere else. See [The web UI](web-ui.md).
 
 ## Plain-text output
 

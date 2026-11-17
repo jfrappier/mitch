@@ -1,12 +1,13 @@
-[Mitch docs](README.md) › Scanning Vault
-
-# Scanning Vault
+---
+title: Scanning Vault
+weight: 2
+---
 
 `mitch scan` reads a Vault cluster and saves an encrypted inventory of what it found. It never writes to Vault and never reads secret values.
 
-Before your first saved scan, create the database with `mitch init`. See [saving-scans.md](saving-scans.md). To print the inventory as JSON without saving it, use `--no-save`.
+Before your first saved scan, create the database with `mitch init`. See [Saving scans](saving-scans.md). To print the inventory as JSON without saving it, use `--no-save`.
 
-To see what changed between two saved scans, use `mitch diff`. See [comparing-scans.md](comparing-scans.md).
+To see what changed between two saved scans, use `mitch diff`. See [Comparing scans](comparing-scans.md).
 
 ## 1. Create the Mitch policy and token
 
@@ -61,7 +62,7 @@ mitch scan
 
 Mitch asks for your passphrase. In CI, set `MITCH_PASSPHRASE` instead.
 
-The scan is saved and its id is printed. Use `mitch history` and `mitch export` to see it ([saving-scans.md](saving-scans.md)).
+The scan is saved and its id is printed. Use `mitch history` and `mitch export` to see it ([Saving scans](saving-scans.md)).
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
@@ -69,7 +70,7 @@ The scan is saved and its id is printed. Use `mitch history` and `mitch export` 
 | `--kv` | on | Count secrets in KV mounts. `--kv=false` turns it off. |
 | `--no-save` | off | Do not save the scan. Print the JSON to standard output instead. Needs no database. |
 | `--output FILE` | none | Also write the JSON to a file, in plain text. The file is created readable only by you (`0600`). |
-| `--db PATH`, `--passphrase-file FILE` | see [saving-scans.md](saving-scans.md) | Where to save, and how to unlock. |
+| `--db PATH`, `--passphrase-file FILE` | see [Saving scans](saving-scans.md) | Where to save, and how to unlock. |
 | `--timeout DURATION` | `10m` | Stop the scan if it takes longer than this, for example `30s` or `1h`. |
 
 `VAULT_NAMESPACE` is ignored on purpose. Mitch always starts at the root namespace and, on Vault Enterprise, scans every child namespace it can see.
@@ -102,7 +103,7 @@ Large KV mounts take one request per folder. If a scan hits `--timeout`, raise i
 | Some checks were skipped (missing grant, HTTP 403 or 404), or a KV mount was only partly counted | 5 |
 | The scan could not run or could not be saved (no database, wrong passphrase, no token, Vault unreachable, sealed, HTTP 5xx) | 1 |
 
-Every skipped check is listed in the JSON under `skipped` and logged as a `check skipped` warning with the HTTP status and the next step. A KV mount gets one `skipped` entry no matter how many of its folders failed. Checks left out on purpose, such as sudo checks without `--sudo`, KV counts with `--kv=false`, or Enterprise checks on Vault Community, are listed under `not_requested` and do not change the exit code. See [exit-codes.md](exit-codes.md).
+Every skipped check is listed in the JSON under `skipped` and logged as a `check skipped` warning with the HTTP status and the next step. A KV mount gets one `skipped` entry no matter how many of its folders failed. Checks left out on purpose, such as sudo checks without `--sudo`, KV counts with `--kv=false`, or Enterprise checks on Vault Community, are listed under `not_requested` and do not change the exit code. See [Exit codes](exit-codes.md).
 
 ## Output
 
@@ -130,12 +131,8 @@ Each `kv_counts` entry looks like this:
 - `kv_counts` is `null` when counting was off or the namespace's secrets engines could not be read, and `[]` when the namespace has no KV mounts.
 - Key and folder names are never recorded.
 
-Saved scans are encrypted. JSON printed with `--no-save`, `--output` or `mitch export` is plain text. Treat it as sensitive: it describes your Vault's layout and contains every ACL policy. See [data-security.md](data-security.md).
+Saved scans are encrypted. JSON printed with `--no-save`, `--output` or `mitch export` is plain text. Treat it as sensitive: it describes your Vault's layout and contains every ACL policy. See [How Mitch protects your data](data-security.md).
 
 ## Tested versions
 
 Integration tests run against Vault Community 1.19.5 and 2.2.2 on every pull request. Enterprise namespace handling is covered by unit tests against a simulated Vault, but has not been run against a real Vault Enterprise cluster yet.
-
----
-
-**Next:** [Reports](reports.md)

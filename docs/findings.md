@@ -1,6 +1,7 @@
-[Mitch docs](README.md) › Policy findings
-
-# Policy findings
+---
+title: Policy findings
+weight: 4
+---
 
 Mitch checks every ACL policy in a saved scan for grants that are broader than they look, and for rules that do not do what they seem to. Findings show up in `mitch report`, in the JSON report, and in the `mitch serve` report page. `mitch report --fail-on` turns them into an exit code for CI.
 
@@ -20,7 +21,7 @@ The **Policy findings** section lists each finding, most serious first, with its
 mitch report --fail-on high
 ```
 
-The report prints as usual. If any finding is at or above `high`, Mitch logs an error with the count and exits with code 4 (see [exit-codes.md](exit-codes.md)). Without `--fail-on`, findings never change the exit code.
+The report prints as usual. If any finding is at or above `high`, Mitch logs an error with the count and exits with code 4 (see [Exit codes](exit-codes.md)). Without `--fail-on`, findings never change the exit code.
 
 `--fail-on` takes `critical`, `high`, `medium` or `low`. Any other value fails with exit code 2 before the passphrase is read.
 
@@ -75,13 +76,9 @@ When more than one path block matches a request, Mitch picks the winner with Vau
 - **Mitch's own sudo add-on is flagged, on purpose.** If you loaded it, it gets three MITCH-POL-004 (medium) findings, one per root-protected path it needs. Mitch's base and KV policies get none.
 - **The `root` policy is skipped.** Vault does not return its text. The `default` policy is checked like any other, because people edit it.
 - **Sentinel policies** (Enterprise) are not read in v1.
-- **No folder-level suggestions.** Mitch does not suggest replacing a glob such as `secret/data/*` with the exact folders in use, because that needs folder names, and Mitch never stores them (see [design-decisions.md](design-decisions.md#kv-secrets-are-counted-not-named)).
-- **Not built yet:** the "no git repository" finding, which comes with the planned `--repo` option. See [design-decisions.md](design-decisions.md#git-as-the-source-of-truth).
+- **No folder-level suggestions.** Mitch does not suggest replacing a glob such as `secret/data/*` with the exact folders in use, because that needs folder names, and Mitch never stores them (see [Design decisions](design-decisions.md#kv-secrets-are-counted-not-named)).
+- **Not built yet:** the "no git repository" finding, which comes with the planned `--repo` option. See [Design decisions](design-decisions.md#git-as-the-source-of-truth).
 
 ## JSON fields
 
 In the JSON report, `findings` is a list of objects with `rule`, `severity`, `namespace`, `policy`, `path`, `line`, `message` and `suggestion`. `summary.findings` has the counts by severity. `policies_not_analyzed` lists policies that could not be parsed, with a `reason`. `unknown_mount_check_skipped` lists namespaces where MITCH-POL-007 did not run. All three lists are `[]` when empty.
-
----
-
-**Next:** [Comparing scans](comparing-scans.md)

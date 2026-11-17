@@ -1,10 +1,11 @@
-[Mitch docs](README.md) › Reports
-
-# Reports
+---
+title: Reports
+weight: 3
+---
 
 `mitch report` summarizes one saved scan: what is in Vault, counted and grouped, and anything the scan could not read. It reads only the saved, encrypted scan and never contacts Vault.
 
-It needs the same database and passphrase as the other commands. See [saving-scans.md](saving-scans.md).
+It needs the same database and passphrase as the other commands. See [Saving scans](saving-scans.md).
 
 ## 1. Show a report
 
@@ -33,7 +34,7 @@ The terminal still shows the Markdown, and `report.json` gets the same report as
 | Header | Scan id and time, Vault address, version, edition, cluster name, and whether sudo checks ran. |
 | Summary | Counts of namespaces, secrets engines, auth methods, ACL policies, KV secrets, plugins, deprecated items, skipped checks and policy findings by severity. |
 | Scan gaps | Checks that could not run (with the HTTP status, reason and next step) and checks left out on purpose, such as sudo checks. Only shown when there are any. |
-| Policy findings | Problems in ACL policies, most serious first, with the rule, path, line and a suggested fix. Also any policy that could not be parsed. See [findings.md](findings.md). |
+| Policy findings | Problems in ACL policies, most serious first, with the rule, path, line and a suggested fix. Also any policy that could not be parsed. See [Policy findings](findings.md). |
 | Mounts by type | Secrets engines and auth methods counted by type, most common first. |
 | Secrets engines, Auth methods | Every mount, by namespace, with its type, plugin version and description. |
 | KV secrets | Secrets and folders per KV mount. "no, counts are a lower bound" means part of the mount could not be listed. |
@@ -67,13 +68,9 @@ The file's format comes from its extension: `.json` or `.md`, in any case. Any o
 | `--scan ID` | newest scan | The scan to report on. |
 | `--format markdown\|json` | `markdown` | What the terminal shows. |
 | `--output FILE` | none | Also save to `FILE`: `.json` saves JSON, `.md` saves Markdown. |
-| `--fail-on SEVERITY` | never | Exit with code 4 when any policy finding is at or above `critical`, `high`, `medium` or `low`. The report still prints. See [findings.md](findings.md#2-fail-a-ci-job-on-findings). |
-| `--db PATH`, `--passphrase-file FILE` | | See [saving-scans.md](saving-scans.md). |
+| `--fail-on SEVERITY` | never | Exit with code 4 when any policy finding is at or above `critical`, `high`, `medium` or `low`. The report still prints. See [Policy findings](findings.md#2-fail-a-ci-job-on-findings). |
+| `--db PATH`, `--passphrase-file FILE` | | See [Saving scans](saving-scans.md). |
 
 ## The output is plain text
 
-The report describes your Vault's layout from the encrypted scan, so Mitch logs a warning each time it shows or saves one. See [data-security.md](data-security.md#plain-text-output).
-
----
-
-**Next:** [Policy findings](findings.md)
+The report describes your Vault's layout from the encrypted scan, so Mitch logs a warning each time it shows or saves one. See [How Mitch protects your data](data-security.md#plain-text-output).

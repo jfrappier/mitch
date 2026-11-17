@@ -1,6 +1,7 @@
-[Mitch docs](README.md) › Generating Terraform
-
-# Generating Terraform
+---
+title: Generating Terraform
+weight: 6
+---
 
 `mitch terraform` writes Terraform configuration for the Vault setup in a saved scan, with [import blocks](https://developer.hashicorp.com/terraform/language/import) so Terraform adopts what already exists instead of creating it again. It reads only the saved, encrypted scan and never contacts Vault.
 
@@ -14,7 +15,7 @@ flowchart LR
     apply --> managed["Change Vault by<br>editing the files"]
 ```
 
-This is the first step toward managing Vault as code (see [design-decisions.md](design-decisions.md#git-as-the-source-of-truth)): generate, review, commit to git, and let Terraform own the configuration from then on.
+This is the first step toward managing Vault as code (see [Design decisions](design-decisions.md#git-as-the-source-of-truth)): generate, review, commit to git, and let Terraform own the configuration from then on.
 
 You need Terraform 1.5 or later. The files use the `hashicorp/vault` provider, version 5.
 
@@ -26,7 +27,7 @@ mitch terraform --output-dir vault-terraform
 
 This uses the newest saved scan. Pass `--scan ID` for another one. The folder must not exist yet, or be empty, so existing files are never overwritten.
 
-For the most complete result, scan with a token that can read everything you want managed. Audit devices are only included when the scan ran with `--sudo`; see [scanning.md](scanning.md).
+For the most complete result, scan with a token that can read everything you want managed. Audit devices are only included when the scan ran with `--sudo`; see [Scanning Vault](scanning.md).
 
 ## 2. Check the plan
 
@@ -95,4 +96,4 @@ Scans saved by a Mitch build from before 2026-11-14 do not record caching, listi
 | --- | --- | --- |
 | `--output-dir DIR` | required | Folder to write to. It must not exist yet, or be empty. |
 | `--scan ID` | newest scan | The scan to generate from. |
-| `--db PATH`, `--passphrase-file FILE` | | See [saving-scans.md](saving-scans.md). |
+| `--db PATH`, `--passphrase-file FILE` | | See [Saving scans](saving-scans.md). |

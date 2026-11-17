@@ -1,10 +1,11 @@
-[Mitch docs](README.md) › Comparing scans
-
-# Comparing scans
+---
+title: Comparing scans
+weight: 5
+---
 
 `mitch diff` shows what changed in Vault between two saved scans: mounts, auth methods, ACL policies, KV secret counts, plugins, namespaces and server settings. It reads only the saved, encrypted scans and never contacts Vault.
 
-It needs the same database and passphrase as the other commands. See [saving-scans.md](saving-scans.md).
+It needs the same database and passphrase as the other commands. See [Saving scans](saving-scans.md).
 
 ## 1. Save at least two scans
 
@@ -79,15 +80,15 @@ How output works is the same for `mitch report`. See [Output and files](reports.
 | `--to ID` | newest scan | The newer scan. |
 | `--format markdown\|json` | `markdown` | What the terminal shows. Use `json` to pipe into tools such as `jq`. |
 | `--output FILE` | none | Also save to `FILE`: `.json` saves JSON, `.md` saves Markdown. |
-| `--db PATH`, `--passphrase-file FILE` | | See [saving-scans.md](saving-scans.md). |
+| `--db PATH`, `--passphrase-file FILE` | | See [Saving scans](saving-scans.md). |
 
-`mitch diff` exits with `0` whether or not anything changed. See [exit-codes.md](exit-codes.md) for failures.
+`mitch diff` exits with `0` whether or not anything changed. See [Exit codes](exit-codes.md) for failures.
 
 ## Warnings
 
 Some differences are not real changes in Vault. `mitch diff` lists a warning at the top when:
 
-- **A scan skipped checks.** If a scan could not read something (for example after an HTTP 403), those items look removed or added. Fix the policy and scan again; see [scanning.md](scanning.md).
+- **A scan skipped checks.** If a scan could not read something (for example after an HTTP 403), those items look removed or added. Fix the policy and scan again; see [Scanning Vault](scanning.md).
 - **A part was collected in only one scan.** Audit devices and plugin runtimes need `--sudo`, server config is missing when the scan could not read it, and KV counts can be turned off with `--kv=false`. A part missing from either scan is not compared.
 - **The scans are of different Vault addresses.** The differences are then between two clusters.
 
@@ -108,4 +109,4 @@ A mount that was disabled and enabled again at the same path shows as changed, w
 
 ## The output is plain text
 
-The diff contains policy text and mount settings from the encrypted scans. See [data-security.md](data-security.md#plain-text-output).
+The diff contains policy text and mount settings from the encrypted scans. See [How Mitch protects your data](data-security.md#plain-text-output).
