@@ -55,4 +55,4 @@ The printed link uses `127.0.0.1:8484`, which reaches the container through the 
 
 If the port is in use, Mitch exits with an error; pick another with `--listen 127.0.0.1:8485`.
 
-> **Not built yet:** policy findings. The UI will show them once `mitch` produces them.
+The report page shows the same policy findings as `mitch report`. See [findings.md](findings.md).

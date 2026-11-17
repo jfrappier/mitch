@@ -219,3 +219,72 @@ func TestCountLines(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildFindings(t *testing.T) {
+	inventory := scan.Inventory{Namespaces: []scan.NamespaceInventory{
+		{
+			Path:           "",
+			SecretsEngines: []scan.Mount{{Path: "secret/", Type: "kv"}},
+			ACLPolicies: []scan.Policy{
+				{Name: "admin", Text: "path \"*\" {\n  capabilities = [\"read\", \"sudo\"]\n}"},
+				{Name: "broken", Text: "path {"},
+			},
+		},
+		{
+			Path:        "team-a/",
+			ACLPolicies: []scan.Policy{{Name: "old", Text: "path \"old-kv/*\" {\n  capabilities = [\"read\"]\n}"}},
+		},
+	}}
+	inventory.Skipped = []scan.SkippedCheck{{Check: "secrets_engines", Namespace: "team-a/", Reason: "permission denied"}}
+
+	built := Build("abcd", inventory)
+
+	if len(built.Findings) != 1 || built.Findings[0].Rule != "MITCH-POL-001" || built.Findings[0].Namespace != "(root)" {
+		t.Errorf("expected one MITCH-POL-001 finding in (root), got %+v", built.Findings)
+	}
+	expectedCounts := FindingCounts{Critical: 1}
+	if built.Summary.Findings != expectedCounts {
+		t.Errorf("finding counts: got %+v, want %+v", built.Summary.Findings, expectedCounts)
+	}
+	if len(built.PoliciesNotAnalyzed) != 1 || built.PoliciesNotAnalyzed[0].Policy != "broken" || built.PoliciesNotAnalyzed[0].Namespace != "(root)" {
+		t.Errorf("expected the broken policy as not analyzed, got %+v", built.PoliciesNotAnalyzed)
+	}
+	if !reflect.DeepEqual(built.UnknownMountCheckSkipped, []string{"team-a/"}) {
+		t.Errorf("expected the missing-mount check skipped in team-a/, got %v", built.UnknownMountCheckSkipped)
+	}
+	if built.CountFindingsAtOrAbove("critical") != 1 || built.CountFindingsAtOrAbove("low") != 1 {
+		t.Errorf("CountFindingsAtOrAbove is wrong for %+v", built.Findings)
+	}
+
+	var markdown bytes.Buffer
+	err := WriteMarkdown(&markdown, built)
+	if err != nil {
+		t.Fatalf("WriteMarkdown failed: %v", err)
+	}
+	for _, expected := range []string{
+		"## Policy findings",
+		"| critical | MITCH-POL-001 | (root) | admin | * | 1 |",
+		"| Policy findings (critical / high / medium / low) | 1 / 0 / 0 / 0 |",
+		"| (root) | broken |",
+		"were not checked in these namespaces, because the scan could not list their mounts: team-a/",
+	} {
+		if !strings.Contains(markdown.String(), expected) {
+			t.Errorf("Markdown is missing %q:\n%s", expected, markdown.String())
+		}
+	}
+}
+
+func TestBuildWithNoFindingsSaysNone(t *testing.T) {
+	built := Build("abcd", sampleInventory())
+	if built.Findings == nil || built.PoliciesNotAnalyzed == nil || built.UnknownMountCheckSkipped == nil {
+		t.Errorf("finding lists must be [] in JSON, not null: %+v", built)
+	}
+	var markdown bytes.Buffer
+	err := WriteMarkdown(&markdown, built)
+	if err != nil {
+		t.Fatalf("WriteMarkdown failed: %v", err)
+	}
+	if !strings.Contains(markdown.String(), "## Policy findings\n\nRules and fixes are explained in docs/findings.md.\n\nNone found.") {
+		t.Errorf("expected an empty findings section:\n%s", markdown.String())
+	}
+}

@@ -108,6 +108,95 @@ func TestReportWarnsOnPartialScan(t *testing.T) {
 	}
 }
 
+// inventoryWithRootLikePolicy has one policy that grants sudo on every path,
+// which is a critical finding (MITCH-POL-001).
+func inventoryWithRootLikePolicy() string {
+	return inventoryWithOnePolicy("*", `"read", "sudo"`)
+}
+
+// inventoryWithMissingMountPolicy reads from a mount that does not exist,
+// which is a low finding (MITCH-POL-007).
+func inventoryWithMissingMountPolicy() string {
+	return inventoryWithOnePolicy("old-kv/*", `"read"`)
+}
+
+// inventoryWithOnePolicy has one policy named "admin" with one path block
+// granting the given capability list, written as HCL (for example
+// `"read", "sudo"`). There are no mounts, so only built-in paths exist.
+func inventoryWithOnePolicy(policyPath string, capabilities string) string {
+	policyText := "path \"" + policyPath + "\" {\n  capabilities = [" + capabilities + "]\n}"
+	encoded, err := json.Marshal(policyText)
+	if err != nil {
+		panic(err)
+	}
+	return `{"vault_address":"http://127.0.0.1:8200","health":{"version":"2.2.2"},` +
+		`"namespaces":[{"path":"","secrets_engines":[],"auth_methods":[],` +
+		`"acl_policies":[{"name":"admin","policy":` + string(encoded) + `}],"kv_counts":null}]}`
+}
+
+func TestReportShowsFindings(t *testing.T) {
+	path := testDatabase(t)
+	runForTest("init")
+	saveTestScan(t, path, time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC), inventoryWithRootLikePolicy())
+
+	exitCode, stdout, stderr := runForTest("report")
+	if exitCode != exitcode.Success {
+		t.Fatalf("without --fail-on, findings must not change the exit code: exit %d\nstderr: %s", exitCode, stderr)
+	}
+	for _, expected := range []string{"## Policy findings", "| critical | MITCH-POL-001 | (root) | admin | * | 1 |", "| 1 / 0 / 0 / 0 |"} {
+		if !strings.Contains(stdout, expected) {
+			t.Errorf("report is missing %q:\n%s", expected, stdout)
+		}
+	}
+}
+
+func TestReportFailOn(t *testing.T) {
+	cases := []struct {
+		name      string
+		inventory string
+		failOn    string
+		exitCode  int
+	}{
+		{"low finding, fail on high", inventoryWithMissingMountPolicy(), "high", exitcode.Success},
+		{"low finding, fail on low", inventoryWithMissingMountPolicy(), "low", exitcode.FindingsAboveThreshold},
+		{"critical finding, fail on critical", inventoryWithRootLikePolicy(), "critical", exitcode.FindingsAboveThreshold},
+		{"critical finding, fail on medium", inventoryWithRootLikePolicy(), "medium", exitcode.FindingsAboveThreshold},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			path := testDatabase(t)
+			runForTest("init")
+			saveTestScan(t, path, time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC), testCase.inventory)
+
+			exitCode, stdout, stderr := runForTest("report", "--fail-on", testCase.failOn)
+			if exitCode != testCase.exitCode {
+				t.Fatalf("expected exit %d, got %d\nstderr: %s", testCase.exitCode, exitCode, stderr)
+			}
+			if !strings.HasPrefix(stdout, "# Mitch report") {
+				t.Errorf("the report must print even when --fail-on fails:\n%s", stdout)
+			}
+			if testCase.exitCode == exitcode.FindingsAboveThreshold && !strings.Contains(stderr, "fail_on="+testCase.failOn) {
+				t.Errorf("expected the --fail-on error in the log:\n%s", stderr)
+			}
+		})
+	}
+}
+
+func TestReportWarnsOnUnparsablePolicy(t *testing.T) {
+	path := testDatabase(t)
+	runForTest("init")
+	broken := `{"namespaces":[{"path":"","secrets_engines":[],"auth_methods":[],"acl_policies":[{"name":"broken","policy":"path {"}]}]}`
+	saveTestScan(t, path, time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC), broken)
+
+	exitCode, stdout, stderr := runForTest("report")
+	if exitCode != exitcode.Success {
+		t.Fatalf("report failed: exit %d\nstderr: %s", exitCode, stderr)
+	}
+	if !strings.Contains(stdout, "could not be parsed") || !strings.Contains(stderr, "policies_not_analyzed=1") {
+		t.Errorf("expected the unparsable policy in the report and the log\nstdout: %s\nstderr: %s", stdout, stderr)
+	}
+}
+
 func TestReportErrors(t *testing.T) {
 	cases := []struct {
 		name      string
@@ -122,6 +211,7 @@ func TestReportErrors(t *testing.T) {
 		{"bad format", nil, []string{"report", "--format", "html"}, exitcode.UsageError, `--format must be "markdown" or "json"`},
 		{"bad extension", nil, []string{"report", "--output", "report.csv"}, exitcode.UsageError, "must end in .md (Markdown) or .json (JSON)"},
 		{"extra argument", nil, []string{"report", "extra"}, exitcode.UsageError, "unexpected argument"},
+		{"bad fail-on", nil, []string{"report", "--fail-on", "severe"}, exitcode.UsageError, `--fail-on "severe" is not a severity; use one of: critical, high, medium, low`},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
