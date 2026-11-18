@@ -95,7 +95,7 @@ The pages in `docs/` are the documentation. The `website/` folder turns them int
 
 ## Releasing
 
-A release is a version tag. Pushing one runs [`.github/workflows/release.yml`](https://github.com/jfrappier/mitch/blob/main/.github/workflows/release.yml), which:
+A release is a version tag. You can push the tag yourself, or have the workflow create it (see [Release without pushing a tag](#release-without-pushing-a-tag)). Either way, [`.github/workflows/release.yml`](https://github.com/jfrappier/mitch/blob/main/.github/workflows/release.yml) runs, and:
 
 1. Builds the binaries for every platform in the [Installing](installing.md) table, and writes `SHA256SUMS`.
 2. Runs the arm64 binaries on real arm64 machines (a Mac and a Linux runner).
@@ -115,6 +115,13 @@ git push origin v0.1.0
 ```
 
 Then watch the run on the [Actions tab](https://github.com/jfrappier/mitch/actions/workflows/release.yml).
+
+### Release without pushing a tag
+
+1. Open the [release workflow](https://github.com/jfrappier/mitch/actions/workflows/release.yml) and click **Run workflow**.
+2. Leave the branch on `main`, enter the version (such as `v0.1.0`) and click **Run workflow**.
+
+The run checks that it is on `main`, that the version looks like `v0.1.0`, and that the tag does not exist yet, and stops with an error if any of these fails. It builds and checks everything exactly as a tag push does, then creates the tag on the `main` commit it built, at the same moment it creates the release ([`gh release create --target`](https://cli.github.com/manual/gh_release_create)). If any step fails, no tag and no release are created. The image may already be on GHCR by then; running the workflow again with the same version replaces it.
 
 ### After the first release only: make the image public
 
